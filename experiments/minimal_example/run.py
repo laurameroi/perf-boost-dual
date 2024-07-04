@@ -1,4 +1,4 @@
-import sys, os, logging, torch
+import sys, os, logging, torch, time
 from datetime import datetime
 from torch.utils.data import DataLoader
 
@@ -86,6 +86,7 @@ optimizer = torch.optim.Adam(ctl.parameters(), lr=args.lr)
 # ------------ 6. Training ------------
 logger.info('\n------------ Begin training ------------')
 best_valid_loss = 1e6
+t = time.time()
 for epoch in range(args.epochs):
     # iterate over all data batches
     for train_data_batch in train_dataloader:
@@ -119,8 +120,10 @@ for epoch in range(args.epochs):
                 best_valid_loss = loss_valid.item()
                 best_params = ctl.get_parameters_as_vector() # record state dict if best on valid
                 msg += ' (best so far)'
-
+        duration = time.time() - t
+        msg += ' ---||--- time: %.0f s' % (duration)
         logger.info(msg)
+        t = time.time()
 
 # set to best seen during training
 if args.return_best:
