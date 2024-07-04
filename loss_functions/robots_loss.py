@@ -6,14 +6,14 @@ class RobotsLoss(LQLossFH):
     def __init__(
         self, xbar, loss_bound, sat_bound,
         n_agents, Q, alpha_u=1,
-        alpha_ca=None, alpha_obst=None, min_dist=0.5,
+        alpha_col=None, alpha_obst=None, min_dist=0.5,
         obstacle_centers=None, obstacle_covs=None
     ):
         super().__init__(Q=Q, R=alpha_u, loss_bound=loss_bound, sat_bound=sat_bound, xbar=xbar)
         self.n_agents = n_agents
-        self.alpha_ca, self.alpha_obst, self.min_dist = alpha_ca, alpha_obst, min_dist
-        assert (self.alpha_ca is None and self.min_dist is None) or not (self.alpha_ca is None or self.min_dist is None)
-        if not self.alpha_ca is None:
+        self.alpha_col, self.alpha_obst, self.min_dist = alpha_col, alpha_obst, min_dist
+        assert (self.alpha_col is None and self.min_dist is None) or not (self.alpha_col is None or self.min_dist is None)
+        if not self.alpha_col is None:
             assert not self.n_agents is None
         # define obstacles
         if obstacle_centers is None:
@@ -63,10 +63,10 @@ class RobotsLoss(LQLossFH):
         )   # shape = (S, T, 1, 1)
         loss_u = torch.sum(uTRu, 1) / x_batch.shape[1]    # average over the time horizon. shape = (S, 1, 1)
         # collision avoidance loss
-        if self.alpha_ca is None:
+        if self.alpha_col is None:
             loss_ca = 0
         else:
-            loss_ca = self.alpha_ca * self.f_loss_ca(x_batch)       # shape = (S, 1, 1)
+            loss_ca = self.alpha_col * self.f_loss_ca(x_batch)       # shape = (S, 1, 1)
         # obstacle avoidance loss
         if self.alpha_obst is None:
             loss_obst = 0

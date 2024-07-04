@@ -1,20 +1,20 @@
-import torch, copy
+import torch, copy, pickle, os
 import torch.nn.functional as F
 
-from config import device
+from config import device, BASE_DIR
 from assistive_functions import to_tensor, check_data_dim
 
 
 class SystemRobots(torch.nn.Module):
-    def __init__(self, xbar, is_linear, x_init=None, u_init=None, k=1.0):
+    def __init__(self, xbar, linearize_plant, x_init=None, u_init=None, k=1.0):
         """
         x_bar: initial point for all agents
-        is_linear: if True, a linearized model of the system is used.
+        linearize_plant: if True, a linearized model of the system is used.
                    O.w., the model is non-linear. the non-linearity raises
                    from the dependence of friction on the speed.
         """
         super().__init__()
-        self.is_linear = is_linear
+        self.linearize_plant = linearize_plant
         self.n_agents = int(xbar.shape[0]/4)
         self.num_states = 4*self.n_agents
         self.num_inputs = 2*self.n_agents
@@ -22,7 +22,7 @@ class SystemRobots(torch.nn.Module):
         self.mass = 1.0
         self.k = k
         self.b = 1.0
-        self.b2 = None if self.is_linear else 0.1
+        self.b2 = None if self.linearize_plant else 0.1
         m = self.mass
         self.B = torch.kron(torch.eye(self.n_agents),
                             torch.tensor([[0, 0],
@@ -49,7 +49,7 @@ class SystemRobots(torch.nn.Module):
         self.A = self._A1 + self.h * self._A2
 
     def A_nonlin(self, x):
-        assert not self.is_linear
+        assert not self.linearize_plant
         mask = torch.tensor([[0, 0], [1, 1]]).repeat(self.n_agents, 1).to(device)
         A3 = torch.norm(
             x.view(-1, 2 * self.n_agents, 2) * mask, dim=-1, keepdim=True
@@ -64,13 +64,17 @@ class SystemRobots(torch.nn.Module):
         return A
 
     def noiseless_forward(self, t, x, u):
+        """
+        Args:
+            - x:
+        """
         # check sizes
-        x = check_data_dim(x, vec_dim=(1, self.num_states))
+        x = check_data_dim(x, vec_dim=(1, self.num_states)) #TODO
         u = check_data_dim(u, vec_dim=(1, self.num_inputs))
         batch_size = x.shape[0]
         assert batch_size==u.shape[0], 'batch sizes of x and u are different.'
 
-        if self.is_linear:
+        if self.linearize_plant:
             # x is batched but A is not => can use F.linear to compute xA^T
             f = F.linear(x - self.xbar, self.A) + F.linear(u, self.B) + self.xbar
         else:
@@ -81,7 +85,7 @@ class SystemRobots(torch.nn.Module):
 
     def forward(self, t, x, u, w):
         # check sizes
-        x = check_data_dim(x, vec_dim=(1, self.num_states))
+        x = check_data_dim(x, vec_dim=(1, self.num_states))#TODO
         u = check_data_dim(u, vec_dim=(1, self.num_inputs))
         w = check_data_dim(w, vec_dim=(1, self.num_states))
         batch_size = x.shape[0]
@@ -110,7 +114,7 @@ class SystemRobots(torch.nn.Module):
 
         # init
         controller.reset()
-        x = copy.deepcopy(self.x_init)
+        x = copy.deepcopy(self.x_init)  #TODO: check shape of x_init
         x = x.reshape(1, *x.shape).repeat(batch_size, 1, 1)
         u = copy.deepcopy(self.u_init)
         u = u.reshape(1, *u.shape).repeat(batch_size, 1, 1)
@@ -134,4 +138,3 @@ class SystemRobots(torch.nn.Module):
             x_log, u_log = x_log.detach(), u_log.detach()
 
         return x_log, None, u_log
-

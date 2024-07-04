@@ -1,8 +1,10 @@
 import torch, copy
 import torch.nn as nn
 from config import device
+import numpy as np
 
 from .acyclic_ren import AcyclicREN
+from assistive_functions import to_tensor
 
 class RENController(nn.Module):
     """
@@ -117,27 +119,35 @@ class RENController(nn.Module):
         return self.psi_u.get_named_parameters()
 
     def get_parameters_as_vector(self):
-        return torch.cat(list(self.named_parameters().values()), dim=-1)
+        # TODO: implement without numpy
+        return np.concatenate([p.detach().clone().cpu().numpy().flatten() for p in self.psi_u.parameters()])
 
     def set_parameter(self, name, value):
         current_val = getattr(self.psi_u, name)
         value = torch.nn.Parameter(value.reshape(current_val.shape))
         setattr(self.psi_u, name, value)
-        self.psi_u.set_model_param()    # update dependent params
+        self.psi_u.update_model_param()    # update dependent params
 
     def set_parameters(self, param_dict):
         for name, value in param_dict.items():
             self.set_parameter(name, value)
 
     def set_parameters_as_vector(self, value):
+        value = to_tensor(value)
         # value is reshaped to the parameter shape
         idx = 0
-        for name, shape in self.parameter_shapes().items():
-            idx_next = idx + shape[-1]
+        for name, shape in self.get_parameter_shapes().items():
+            if len(shape)==1:
+                dim=shape
+            elif len(shape)==2:
+                dim = shape[0]*shape[1]
+            else:
+                raise NotImplementedError
+            idx_next = idx + dim
             # select indx
-            if value.ndim == 1:
+            if len(value.shape) == 1:
                 value_tmp = value[idx:idx_next]
-            elif value.ndim == 2:
+            elif len(value.shape) == 2:
                 value_tmp = value[:, idx:idx_next]
             else:
                 raise AssertionError
