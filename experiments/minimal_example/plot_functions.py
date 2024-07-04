@@ -14,7 +14,8 @@ def plot_trajectories(
     now = datetime.now()
     formatted_date = now.strftime('%m-%d-%H:%M')
 
-    fig = plt.figure(f)
+    # fig = plt.figure(f)
+    fig, ax = plt.subplots(figsize=(f,f))
     # if obst:
     #     yy, xx = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
     #     zz = xx * 0
@@ -25,38 +26,38 @@ def plot_trajectories(
     #     ax = fig.subplots()
     #     ax.pcolormesh(xx, yy, zz, cmap='Greys', vmin=z_min, vmax=z_max, shading='gouraud')
 
-    plt.title(text)
+    ax.set_title(text)
     colors = ['tab:blue', 'tab:orange']
     for i in range(n_agents):
-        plt.plot(
+        ax.plot(
             x[:T+1,4*i].detach().cpu(), x[:T+1,4*i+1].detach().cpu(),
             color=colors[i%2], linewidth=1
         )
-        plt.plot(
+        ax.plot(
             x[T:,4*i].detach().cpu(), x[T:,4*i+1].detach().cpu(),
             color='k', linewidth=0.1, linestyle='dotted', dashes=(3, 15)
         )
     for i in range(n_agents):
-        plt.plot(
+        ax.plot(
             x[0,4*i].detach().cpu(), x[0,4*i+1].detach().cpu(),
             color=colors[i%2], marker='8'
         )
-        plt.plot(
+        ax.plot(
             xbar[4*i].detach().cpu(), xbar[4*i+1].detach().cpu(),
             color=colors[i%2], marker='*', markersize=10
         )
-    ax = plt.gca()
+
     if dots:
         for i in range(n_agents):
             for j in range(T):
-                plt.plot(
+                ax.plot(
                     x[j, 4*i].detach().cpu(), x[j, 4*i+1].detach().cpu(),
                     color=colors[i%2], marker='o'
                 )
     if circles:
         for i in range(n_agents):
             r = min_dist/2
-            circle = plt.Circle(
+            circle = ax.Circle(
                 (x[T, 4*i].detach().cpu(), x[T, 4*i+1].detach().cpu()),
                 r, color=colors[i%2], alpha=0.5, zorder=10
             )
@@ -64,14 +65,14 @@ def plot_trajectories(
     ax.axes.xaxis.set_visible(axis)
     ax.axes.yaxis.set_visible(axis)
     if save:
-        plt.savefig(
+        fig.savefig(
             os.path.join(
                 BASE_DIR, 'experiments', 'robotsX', 'saved_results',
                 filename+'_trajectories' + formatted_date +'.pdf'
             ),
             format='pdf'
         )
-    return fig
+    plt.show()
 
 
 def plot_traj_vs_time(t_end, n_agents, x, u=None, text="", save=True, filename=''):

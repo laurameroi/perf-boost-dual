@@ -87,7 +87,7 @@ optimizer = torch.optim.Adam(ctl.parameters(), lr=args.lr)
 logger.info('\n------------ Begin training ------------')
 best_valid_loss = 1e6
 t = time.time()
-for epoch in range(args.epochs):
+for epoch in range(1+args.epochs):
     # iterate over all data batches
     for train_data_batch in train_dataloader:
         optimizer.zero_grad()
