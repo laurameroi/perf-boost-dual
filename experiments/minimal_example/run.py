@@ -18,10 +18,10 @@ from assistive_functions import WrapLogger
 # ----- SET UP LOGGER -----
 now = datetime.now().strftime("%m_%d_%H_%M_%S")
 save_path = os.path.join(BASE_DIR, 'experiments', 'minimal_example', 'saved_results')
-save_folder = os.path.join(save_path, 'ren_controller_'+now)
+save_folder = os.path.join(save_path, 'perf_boost_'+now)
 os.makedirs(save_folder)
 logging.basicConfig(filename=os.path.join(save_folder, 'log'), format='%(asctime)s %(message)s', filemode='w')
-logger = logging.getLogger('ren_controller_')
+logger = logging.getLogger('perf_boost_')
 logger.setLevel(logging.DEBUG)
 logger = WrapLogger(logger)
 
