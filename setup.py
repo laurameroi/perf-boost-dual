@@ -5,14 +5,19 @@ except ImportError:
 
 
 setup(
-    name='ren-controllers',
+    name='your-repo-name',
     version='1.0.0',
-    long_description=open('README.md').read(),
-    long_description_content_type='text/markdown',
-    packages=[
-        'plants',
-        'loss_functions',
-        'controllers',
-        'plants.robots',
+    url='https://github.com/DecodEPFL/your-repo-name',
+    license='CC-BY-4.0 License',
+    author='Your_name',
+    author_email='name.surname@epfl.ch',
+    description='Add a description here',
+    install_requires=['torch>=2.3',
+                      'numpy>=1.24.4',
+                      'matplotlib==3.8.4'],
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
     ],
+    python_requires='>=3.10.12',
 )
