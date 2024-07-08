@@ -14,6 +14,7 @@ setup(
     description='Add a description here',
     install_requires=['torch>=2.3',
                       'numpy>=1.24.4',
+                      'scipy>=1.13.1',
                       'matplotlib==3.8.4'],
     classifiers=[
         "Programming Language :: Python :: 3",
