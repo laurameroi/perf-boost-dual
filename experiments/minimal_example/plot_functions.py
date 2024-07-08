@@ -1,8 +1,9 @@
 import torch, os
-from scipy.stats import multivariate_normal # TODO: use something compatible with tensors
+from scipy.stats import multivariate_normal  # TODO: use something compatible with tensors
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
+
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -19,8 +20,8 @@ def plot_trajectories(
     # fig = plt.figure(f)
     fig, ax = plt.subplots(figsize=(f,f))
     # plot obstacles
-    if not obstacle_covs is None:
-        assert not obstacle_centers is None
+    if obstacle_covs is not None:
+        assert obstacle_centers is not None
         yy, xx = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
         zz = xx * 0
         for center, cov in zip(obstacle_centers, obstacle_covs):

@@ -6,6 +6,7 @@ from config import device
 from .contractive_ren import ContractiveREN
 from assistive_functions import to_tensor
 
+
 class PerfBoostController(nn.Module):
     """
     Performance boosting controller, following the paper:
@@ -22,7 +23,7 @@ class PerfBoostController(nn.Module):
         dim_internal: int, dim_nl: int,
         initialization_std: float = 0.5,
         posdef_tol: float = 0.001, contraction_rate_lb: float = 1.0,
-        ren_internal_state_init = None,
+        ren_internal_state_init=None,
         # misc
         output_amplification: float=20,
     ):
@@ -74,7 +75,6 @@ class PerfBoostController(nn.Module):
         self.last_output = copy.deepcopy(self.output_init)
         self.c_ren.x = self.c_ren.init_x    # reset the REN state to the initial value
 
-
     def forward(self, input_t: torch.Tensor):
         """
         Forward pass of the controller.
@@ -92,7 +92,7 @@ class PerfBoostController(nn.Module):
             t=self.t,
             x=self.last_input,  # last input to the controller is the last state of the plant
             u=self.last_output  # last output of the controller is the last input to the plant
-        ) # shape = (self.batch_size, 1, self.dim_in)
+        )  # shape = (self.batch_size, 1, self.dim_in)
 
         # reconstruct the noise
         w_ = input_t - u_noiseless # shape = (self.batch_size, 1, self.dim_in)
@@ -132,9 +132,9 @@ class PerfBoostController(nn.Module):
         # value is reshaped to the parameter shape
         idx = 0
         for name, shape in self.get_parameter_shapes().items():
-            if len(shape)==1:
-                dim=shape
-            elif len(shape)==2:
+            if len(shape) == 1:
+                dim = shape
+            elif len(shape) == 2:
                 dim = shape[0]*shape[1]
             else:
                 raise NotImplementedError
@@ -151,7 +151,6 @@ class PerfBoostController(nn.Module):
                 self.set_parameter(name, value_tmp)
             idx = idx_next
         assert idx_next == value.shape[-1]
-
 
     def __call__(self, *args, **kwargs):
         return self.forward(*args, **kwargs)

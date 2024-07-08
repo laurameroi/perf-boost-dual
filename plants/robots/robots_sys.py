@@ -1,6 +1,7 @@
 import torch, copy
 import torch.nn.functional as F
 
+
 class SystemRobots(torch.nn.Module):
     def __init__(self, xbar: torch.Tensor, linear_plant: bool, x_init=None, u_init=None, k: float=1.0):
         """
@@ -23,12 +24,12 @@ class SystemRobots(torch.nn.Module):
         self.register_buffer('x_init', x_init)
         u_init = torch.zeros(1, int(self.xbar.shape[1]/2)) if u_init is None else u_init.reshape(1, -1)   # shape = (1, in_dim)
         self.register_buffer('u_init', u_init)
-        # check dimentions
+        # check dimensions
         self.n_agents = int(self.xbar.shape[1]/4)
         self.state_dim = 4*self.n_agents
         self.in_dim = 2*self.n_agents
-        assert self.xbar.shape[1]==self.state_dim and self.x_init.shape[1]==self.state_dim
-        assert self.u_init.shape[1]==self.in_dim
+        assert self.xbar.shape[1] == self.state_dim and self.x_init.shape[1] == self.state_dim
+        assert self.u_init.shape[1] == self.in_dim
 
         self.h = 0.05
         self.mass = 1.0
@@ -37,21 +38,21 @@ class SystemRobots(torch.nn.Module):
         self.b2 = None if self.linear_plant else 0.1
         m = self.mass
         B = torch.kron(torch.eye(self.n_agents),
-                            torch.tensor([[0, 0],
-                                          [0., 0],
-                                          [1/m, 0],
-                                          [0, 1/m]])
-                            ) * self.h
+                       torch.tensor([[0, 0],
+                                     [0., 0],
+                                     [1/m, 0],
+                                     [0, 1/m]])
+                       ) * self.h
         self.register_buffer('B', B)
 
         _A1 = torch.eye(4*self.n_agents)
         _A2 = torch.cat((torch.cat((torch.zeros(2,2),
-                                   torch.eye(2)
-                                   ), dim=1),
+                                torch.eye(2)
+                                ), dim=1),
                         torch.cat((torch.diag(torch.tensor([-self.k/self.mass, -self.k/self.mass])),
                                    torch.diag(torch.tensor([-self.b/self.mass, -self.b/self.mass]))
-                                   ),dim=1),
-                        ),dim=0)
+                                   ), dim=1),
+                        ), dim=0)
         _A2 = torch.kron(torch.eye(self.n_agents), _A2)
         A_lin = _A1 + self.h * _A2
         self.register_buffer('A_lin', A_lin)

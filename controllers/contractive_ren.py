@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
 
+
 class ContractiveREN(nn.Module):
     """
     Acyclic contractive recurrent equilibrium network, following the paper:
@@ -160,4 +161,3 @@ class ContractiveREN(nn.Module):
             (name, getattr(self, name)) for name in self.training_param_names
         )
         return param_dict
-

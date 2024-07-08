@@ -3,6 +3,7 @@ from torch.utils.data import Dataset
 
 from config import BASE_DIR
 
+
 class RobotsDataset(Dataset):
     def __init__(self, random_seed, horizon, std_ini=0.2, n_agents=2):
         self.random_seed = random_seed
@@ -56,7 +57,7 @@ class RobotsDataset(Dataset):
 
         # save
         filehandler = open(self.filename, 'wb')
-        pickle.dump({'train_data_full':self.train_data_full, 'test_data':self.test_data}, filehandler)
+        pickle.dump({'train_data_full': self.train_data_full, 'test_data': self.test_data}, filehandler)
         filehandler.close()
 
     # ---- load data ----

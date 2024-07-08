@@ -2,6 +2,7 @@ import torch
 from . import LQLossFH
 from config import device
 
+
 class RobotsLoss(LQLossFH):
     def __init__(
         self, xbar, Q, alpha_u=1,
@@ -14,8 +15,8 @@ class RobotsLoss(LQLossFH):
         self.n_agents = n_agents
         self.alpha_col, self.alpha_obst, self.min_dist = alpha_col, alpha_obst, min_dist
         assert (self.alpha_col is None and self.min_dist is None) or not (self.alpha_col is None or self.min_dist is None)
-        if not self.alpha_col is None:
-            assert not self.n_agents is None
+        if self.alpha_col is not None:
+            assert self.n_agents is not None
         # define obstacles
         if obstacle_centers is None:
             self.obstacle_centers = [
@@ -37,7 +38,7 @@ class RobotsLoss(LQLossFH):
         self.mask = torch.logical_not(torch.eye(self.n_agents, device=device))   # shape = (n_agents, n_agents)
 
     def forward(self, xs, us):
-        '''
+        """
         Compute loss.
 
         Args:
@@ -46,7 +47,7 @@ class RobotsLoss(LQLossFH):
 
         Return:
             - loss of shape (1, 1).
-        '''
+        """
         # batch
         x_batch = xs.reshape(*xs.shape, 1)
         u_batch = us.reshape(*us.shape, 1)
@@ -88,7 +89,7 @@ class RobotsLoss(LQLossFH):
         return loss_val
 
     def f_loss_obst(self, x_batched):
-        '''
+        """
         Obstacle avoidance loss.
 
         Args:
@@ -97,7 +98,7 @@ class RobotsLoss(LQLossFH):
 
         Return:
             - obstacle avoidance loss of shape (1, 1).
-        '''
+        """
         qx = x_batched[:, :, 0::4, :]   # x of all agents. shape = (S, T, n_agents, 1)
         qy = x_batched[:, :, 1::4, :]   # y of all agents. shape = (S, T, n_agents, 1)
         # batched over all samples and all times of [x agent 1, y agent 1, ..., x agent n, y agent n]
@@ -105,15 +106,15 @@ class RobotsLoss(LQLossFH):
         # sum up loss due to each obstacle #TODO
         for ind, (center, cov) in enumerate(zip(self.obstacle_centers, self.obstacle_covs)):
             if ind == 0:
-                loss_obst = normpdf(q, mu=center, cov=cov)  # shape = (S, T)
+                loss_obst = normpdf(q, mu=center, cov=cov)   # shape = (S, T)
             else:
-                loss_obst += normpdf(q, mu=center, cov=cov) # shape = (S, T)
+                loss_obst += normpdf(q, mu=center, cov=cov)  # shape = (S, T)
         # average over time steps
-        loss_obst = loss_obst.sum(1) / loss_obst.shape[1]   # shape = (S)
+        loss_obst = loss_obst.sum(1) / loss_obst.shape[1]    # shape = (S)
         return loss_obst.reshape(-1, 1, 1)
 
     def f_loss_ca(self, x_batch):
-        '''
+        """
         Collision avoidance loss.
 
         Args:
@@ -123,7 +124,7 @@ class RobotsLoss(LQLossFH):
 
         Return:
             - collision avoidance loss of shape (1, 1).
-        '''
+        """
         min_sec_dist = self.min_dist + 0.2
         # compute pairwise distances
         distance_sq = self.get_pairwise_distance_sq(x_batch)              # shape = (S, T, n_agents, n_agents)
@@ -135,9 +136,8 @@ class RobotsLoss(LQLossFH):
         loss_ca = loss_ca.reshape(-1,1,1)
         return loss_ca
 
-
     def count_collisions(self, x_batch):
-        '''
+        """
         Count the number of collisions between agents.
 
         Args:
@@ -146,16 +146,16 @@ class RobotsLoss(LQLossFH):
 
         Return:
             - number of collisions between agents.
-        '''
-        if len (x_batch.shape)==3:
+        """
+        if len(x_batch.shape) == 3:
             x_batch = x_batch.reshape(*x_batch.shape, 1)
         distance_sq = self.get_pairwise_distance_sq(x_batch)  # shape = (S, T, n_agents, n_agents)
-        col_matrix = (0.0001 < distance_sq) * (distance_sq < self.min_dist ** 2) # Boolean collision matrix of shape (S, T, n_agents, n_agents)
+        col_matrix = (0.0001 < distance_sq) * (distance_sq < self.min_dist ** 2)  # Boolean collision matrix of shape (S, T, n_agents, n_agents)
         n_coll = col_matrix.sum().item()    # all collisions at all times and across all rollouts
         return n_coll/2                     # each collision is counted twice
 
     def get_pairwise_distance_sq(self, x_batch):
-        '''
+        """
         Squared distance between pairwise agents.
 
         Args:
@@ -164,7 +164,7 @@ class RobotsLoss(LQLossFH):
 
         Return:
             - matrix of shape (S, T, n_agents, n_agents) of squared pairwise distances.
-        '''
+        """
         num_states_per_agent = int(x_batch.shape[2]/self.n_agents)
         # collision avoidance:
         x_agents = x_batch[:, :, 0::num_states_per_agent, :]  # start from 0, pick every num_states_per_agent. shape = (S, T, n_agents, 1)
@@ -174,8 +174,9 @@ class RobotsLoss(LQLossFH):
         distance_sq = deltaqx ** 2 + deltaqy ** 2             # shape = (S, T, n_agents, n_agents)
         return distance_sq
 
-def normpdf(q, mu, cov): #TODO
-    '''
+
+def normpdf(q, mu, cov):  #TODO
+    """
     PDF of normal distribution with mean "mu" and covariance "cov".
 
     Args:
@@ -185,7 +186,7 @@ def normpdf(q, mu, cov): #TODO
 
     Return:
             -
-    '''
+    """
     d = 2
     mu = mu.view(1, d)
     cov = cov.view(1, d)  # the diagonal of the covariance matrix
@@ -195,7 +196,7 @@ def normpdf(q, mu, cov): #TODO
         den = (2*torch.pi)**(0.5*d) * torch.sqrt(torch.prod(cov))
         nom = torch.exp((-0.5 * (qi - mu)**2 / cov).sum(-1))
         # out = out + num/den
-        if ind==0:
+        if ind == 0:
             out = nom/den
         else:
             out += nom/den

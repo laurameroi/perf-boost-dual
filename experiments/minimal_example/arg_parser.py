@@ -1,5 +1,6 @@
 import argparse, math
 
+
 # argument parser
 def argument_parser():
     parser = argparse.ArgumentParser(description="Training ren for learning contractive motion through imitation.")
@@ -20,15 +21,15 @@ def argument_parser():
     parser.add_argument('--linearize-plant', type=bool, default=False, help='Linearize plant or not. Default is False.')
 
     # controller
-    parser.add_argument('--cont-init-std', type=float, default=0.1 , help='Initialization std for controller params. Default is 0.1.')
+    parser.add_argument('--cont-init-std', type=float, default=0.1, help='Initialization std for controller params. Default is 0.1.')
     parser.add_argument('--dim-internal', type=int, default=8, help='Dimension of the internal state of the controller. Adjusts the size of the linear part of REN. Default is 8.')
     parser.add_argument('--l', type=int, default=8, help='size of the non-linear part of REN. Default is 8.')
 
     # loss
-    parser.add_argument('--alpha-u', type=float, default=0.1/400 , help='Weight of the loss due to control input "u". Default is 0.1/400.') #TODO: 400 is output_amplification^2
-    parser.add_argument('--alpha-col', type=float, default=100 , help='Weight of the collision avoidance loss. Default is 100 if "col-av" is True, else None.')
-    parser.add_argument('--alpha-obst', type=float, default=5e3 , help='Weight of the obstacle avoidance loss. Default is 5e3 if "obst-av" is True, else None.')
-    parser.add_argument('--min-dist', type=float, default=1.0 , help='TODO. Default is 1.0 if "col-av" is True, else None.') #TODO: add help
+    parser.add_argument('--alpha-u', type=float, default=0.1/400, help='Weight of the loss due to control input "u". Default is 0.1/400.')  #TODO: 400 is output_amplification^2
+    parser.add_argument('--alpha-col', type=float, default=100, help='Weight of the collision avoidance loss. Default is 100 if "col-av" is True, else None.')
+    parser.add_argument('--alpha-obst', type=float, default=5e3, help='Weight of the obstacle avoidance loss. Default is 5e3 if "obst-av" is True, else None.')
+    parser.add_argument('--min-dist', type=float, default=1.0, help='TODO. Default is 1.0 if "col-av" is True, else None.')  #TODO: add help
 
     # optimizer
     parser.add_argument('--batch-size', type=int, default=5, help='Number of forward trajectories of the closed-loop system at each step. Default is 5.')
@@ -46,20 +47,19 @@ def argument_parser():
     # parser.add_argument('--load-model', type=str, default=None, help='If it is not set to None, a pretrained model will be loaded instead of training.')
     # parser.add_argument('--device', type=str, default="cuda:0" if torch.cuda.is_available() else "cpu", help='Device to run the computations on, "cpu" or "cuda:0". Default is "cuda:0" if available, otherwise "cpu".')
 
-
     args = parser.parse_args()
 
     # set default values that depend on other args
-    if args.batch_size==-1:
-        args.batch_size = args.num_rollouts # use all train data
+    if args.batch_size == -1:
+        args.batch_size = args.num_rollouts  # use all train data
 
-    if args.epochs==-1 or args.epochs is None:
+    if args.epochs == -1 or args.epochs is None:
         args.epochs = 1000 if args.col_av else 50
 
-    if args.lr==-1 or args.lr is None:
+    if args.lr == -1 or args.lr is None:
         args.lr = 2e-3 if args.col_av else 5e-3
 
-    if args.log_epoch==-1 or args.log_epoch is None:
+    if args.log_epoch == -1 or args.log_epoch is None:
         args.log_epoch = math.ceil(float(args.epochs)/10)
 
     # assertions and warning

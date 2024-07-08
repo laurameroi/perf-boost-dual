@@ -14,6 +14,7 @@ from controllers import PerfBoostController
 from loss_functions import RobotsLoss
 from assistive_functions import WrapLogger
 
+
 # ----- SET UP LOGGER -----
 now = datetime.now().strftime("%m_%d_%H_%M_%S")
 save_path = os.path.join(BASE_DIR, 'experiments', 'minimal_example', 'saved_results')
@@ -102,11 +103,11 @@ for epoch in range(1+args.epochs):
         optimizer.step()
 
     # print info
-    if epoch%args.log_epoch==0:
+    if epoch%args.log_epoch == 0:
         msg = 'Epoch: %i --- train loss: %.2f'% (epoch, loss)
 
         if args.return_best:
-        # rollout the current controller on the valid data
+            # rollout the current controller on the valid data
             with torch.no_grad():
                 x_log_valid, _, u_log_valid = sys.rollout(
                     controller=ctl, data=valid_data, train=False,
@@ -117,7 +118,7 @@ for epoch in range(1+args.epochs):
             # compare with the best valid loss
             if loss_valid.item()<best_valid_loss:
                 best_valid_loss = loss_valid.item()
-                best_params = ctl.get_parameters_as_vector() # record state dict if best on valid
+                best_params = ctl.get_parameters_as_vector()  # record state dict if best on valid
                 msg += ' (best so far)'
         duration = time.time() - t
         msg += ' ---||--- time: %.0f s' % (duration)
@@ -173,7 +174,7 @@ logger.info('Plotting closed-loop trajectories using the trained controller...')
 x_log, _, u_log = sys.rollout(ctl, plot_data)
 filename = os.path.join(save_folder, 'CL_trained.pdf')
 plot_trajectories(
-    x_log[0, :, :], # remove extra dim due to batching
+    x_log[0, :, :],  # remove extra dim due to batching
     dataset.xbar, sys.n_agents, filename=filename, text="CL - trained controller", T=t_ext,
     obstacle_centers=loss_fn.obstacle_centers,
     obstacle_covs=loss_fn.obstacle_covs
