@@ -128,8 +128,6 @@ class PerfBoostController(nn.Module):
             self.set_parameter(name, value)
 
     def set_parameters_as_vector(self, value):
-        value = to_tensor(value)
-        # value is reshaped to the parameter shape
         idx = 0
         for name, shape in self.get_parameter_shapes().items():
             if len(shape) == 1:
@@ -148,7 +146,7 @@ class PerfBoostController(nn.Module):
                 raise AssertionError
             # set
             with torch.no_grad():
-                self.set_parameter(name, value_tmp)
+                self.set_parameter(name, value_tmp.reshape(shape))
             idx = idx_next
         assert idx_next == value.shape[-1]
 
