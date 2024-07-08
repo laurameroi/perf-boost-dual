@@ -174,5 +174,7 @@ x_log, _, u_log = sys.rollout(ctl, plot_data)
 filename = os.path.join(save_folder, 'CL_trained.pdf')
 plot_trajectories(
     x_log[0, :, :], # remove extra dim due to batching
-    dataset.xbar, sys.n_agents, filename=filename, text="CL - trained controller", T=t_ext
+    dataset.xbar, sys.n_agents, filename=filename, text="CL - trained controller", T=t_ext,
+    obstacle_centers=loss_fn.obstacle_centers,
+    obstacle_covs=loss_fn.obstacle_covs
 )

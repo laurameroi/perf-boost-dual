@@ -1,4 +1,5 @@
 import torch, os
+from scipy.stats import multivariate_normal # TODO: use something compatible with tensors
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
@@ -8,7 +9,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 
 def plot_trajectories(
     x, xbar, n_agents, text="", save=True, filename='', T=100, obst=False,
-    dots=False, circles=False, axis=False, min_dist=1, f=5
+    dots=False, circles=False, axis=False, min_dist=1, f=5,
+    obstacle_centers=None, obstacle_covs=None
 ):
     filename = filename if filename == '' else filename+'_'
     now = datetime.now()
@@ -16,15 +18,22 @@ def plot_trajectories(
 
     # fig = plt.figure(f)
     fig, ax = plt.subplots(figsize=(f,f))
-    # if obst:
-    #     yy, xx = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
-    #     zz = xx * 0
-    #     for i in range(xx.shape[0]):
-    #         for j in range(xx.shape[1]):
-    #             zz[i, j] = f_loss_obst(torch.tensor([xx[i, j], yy[i, j], 0.0, 0.0]))
-    #     z_min, z_max = np.abs(zz).min(), np.abs(zz).max()
-    #     ax = fig.subplots()
-    #     ax.pcolormesh(xx, yy, zz, cmap='Greys', vmin=z_min, vmax=z_max, shading='gouraud')
+    # plot obstacles
+    if not obstacle_covs is None:
+        assert not obstacle_centers is None
+        yy, xx = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
+        zz = xx * 0
+        for center, cov in zip(obstacle_centers, obstacle_covs):
+            distr = multivariate_normal(
+                cov=torch.diag(cov.flatten()).detach().clone().cpu().numpy(),
+                mean=center.detach().clone().cpu().numpy().flatten()
+            )
+            for i in range(xx.shape[0]):
+                for j in range(xx.shape[1]):
+                    zz[i, j] += distr.pdf([xx[i, j], yy[i, j]])
+        z_min, z_max = np.abs(zz).min(), np.abs(zz).max()
+        ax = fig.subplots()
+        ax.pcolormesh(xx, yy, zz, cmap='Greys', vmin=z_min, vmax=z_max, shading='gouraud')
 
     ax.set_title(text)
     colors = ['tab:blue', 'tab:orange']

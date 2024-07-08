@@ -1,4 +1,4 @@
-import argparse
+import argparse, math
 
 # argument parser
 def argument_parser():
@@ -60,7 +60,7 @@ def argument_parser():
         args.lr = 2e-3 if args.col_av else 5e-3
 
     if args.log_epoch==-1 or args.log_epoch is None:
-        args.log_epoch = int(args.epochs/10)
+        args.log_epoch = math.ceil(float(args.epochs)/10)
 
     # assertions and warning
     if not args.col_av:
