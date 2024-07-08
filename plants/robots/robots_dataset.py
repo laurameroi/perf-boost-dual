@@ -1,7 +1,7 @@
 import torch, os, pickle
 from torch.utils.data import Dataset
 
-from config import BASE_DIR, device
+from config import BASE_DIR
 
 class RobotsDataset(Dataset):
     def __init__(self, random_seed, horizon, std_ini=0.2, n_agents=2):
@@ -13,10 +13,10 @@ class RobotsDataset(Dataset):
         # initial state TODO: set as arg
         self.x0 = torch.tensor([2., -2, 0, 0,
                         -2, -2, 0, 0,
-                        ], device=device)
+                        ])
         self.xbar = torch.tensor([-2, 2, 0, 0,
                             2., 2, 0, 0,
-                        ], device=device)
+                        ])
 
         # file name and path
         file_path = os.path.join(BASE_DIR, 'experiments', 'minimal_example', 'saved_results')
@@ -42,17 +42,17 @@ class RobotsDataset(Dataset):
         # train data
         num_rollouts_big = 500      # generate 500 sequences, select as many as needed in the exp
         num_states = 4*self.n_agents
-        self.train_data_full = torch.zeros(num_rollouts_big, self.horizon, num_states, device=device)
+        self.train_data_full = torch.zeros(num_rollouts_big, self.horizon, num_states)
         for rollout_num in range(num_rollouts_big):
             self.train_data_full[rollout_num, 0, :] = \
-                (self.x0 - self.xbar) + self.std_ini * torch.randn(self.x0.shape).to(device)
+                (self.x0 - self.xbar) + self.std_ini * torch.randn(self.x0.shape)
 
         # test data
         num_rollouts_test = 500  # number of rollouts in the test data
-        self.test_data = torch.zeros(num_rollouts_test, self.horizon, num_states, device=device)
+        self.test_data = torch.zeros(num_rollouts_test, self.horizon, num_states)
         for rollout_num in range(num_rollouts_test):
             self.test_data[rollout_num, 0, :] = \
-                (self.x0 - self.xbar) + self.std_ini * torch.randn(self.x0.shape).to(device)
+                (self.x0 - self.xbar) + self.std_ini * torch.randn(self.x0.shape)
 
         # save
         filehandler = open(self.filename, 'wb')

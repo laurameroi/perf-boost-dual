@@ -1,137 +1,142 @@
-import torch, copy, pickle, os
+import torch, copy
 import torch.nn.functional as F
 
-from config import device, BASE_DIR
-from assistive_functions import to_tensor, check_data_dim
-
-
 class SystemRobots(torch.nn.Module):
-    def __init__(self, xbar, linearize_plant, x_init=None, u_init=None, k=1.0):
+    def __init__(self, xbar: torch.Tensor, linear_plant: bool, x_init=None, u_init=None, k: float=1.0):
         """
-        x_bar: initial point for all agents
-        linearize_plant: if True, a linearized model of the system is used.
-                   O.w., the model is non-linear. the non-linearity raises
-                   from the dependence of friction on the speed.
+
+        Args:
+            xbar: concatenated nominal initial point of all agents
+            linear_plant: if True, a linearized model of the system is used.
+                             O.w., the model is non-lineardue to the dependence of friction on the speed.
+            x_init: concatenated initial point of all agents. Defaults to xbar when None.
+            u_init: initial input to the plant. Defaults to zero when None.
+            k (float): gain of the pre-stabilizing controller (acts as a spring constant).
         """
         super().__init__()
-        self.linearize_plant = linearize_plant
-        self.n_agents = int(xbar.shape[0]/4)
-        self.num_states = 4*self.n_agents
-        self.num_inputs = 2*self.n_agents
+
+        self.linear_plant = linear_plant
+
+        # initial state
+        self.register_buffer('xbar', xbar.reshape(1, -1))  # shape = (1, state_dim)
+        x_init = copy.deepcopy(self.xbar) if x_init is None else x_init.reshape(1, -1)   # shape = (1, state_dim)
+        self.register_buffer('x_init', x_init)
+        u_init = torch.zeros(1, int(self.xbar.shape[1]/2)) if u_init is None else u_init.reshape(1, -1)   # shape = (1, in_dim)
+        self.register_buffer('u_init', u_init)
+        # check dimentions
+        self.n_agents = int(self.xbar.shape[1]/4)
+        self.state_dim = 4*self.n_agents
+        self.in_dim = 2*self.n_agents
+        assert self.xbar.shape[1]==self.state_dim and self.x_init.shape[1]==self.state_dim
+        assert self.u_init.shape[1]==self.in_dim
+
         self.h = 0.05
         self.mass = 1.0
         self.k = k
         self.b = 1.0
-        self.b2 = None if self.linearize_plant else 0.1
+        self.b2 = None if self.linear_plant else 0.1
         m = self.mass
-        self.B = torch.kron(torch.eye(self.n_agents),
+        B = torch.kron(torch.eye(self.n_agents),
                             torch.tensor([[0, 0],
                                           [0., 0],
                                           [1/m, 0],
                                           [0, 1/m]])
                             ) * self.h
-        self.B = self.B.to(device)
-        self.xbar = xbar
-        self.x_init = copy.deepcopy(xbar) if x_init is None else x_init
-        self.u_init = torch.zeros(self.num_inputs).to(device) if u_init is None else u_init
-        self.x_init = self.x_init.reshape(1, -1)
-        self.u_init = self.u_init.reshape(1, -1)
+        self.register_buffer('B', B)
 
-        self._A1 = torch.eye(4*self.n_agents).to(device)
-        self._A2 = torch.cat((torch.cat((torch.zeros(2,2),
+        _A1 = torch.eye(4*self.n_agents)
+        _A2 = torch.cat((torch.cat((torch.zeros(2,2),
                                    torch.eye(2)
                                    ), dim=1),
                         torch.cat((torch.diag(torch.tensor([-self.k/self.mass, -self.k/self.mass])),
                                    torch.diag(torch.tensor([-self.b/self.mass, -self.b/self.mass]))
                                    ),dim=1),
                         ),dim=0)
-        self._A2 = torch.kron(torch.eye(self.n_agents), self._A2).to(device)
-        self.A = self._A1 + self.h * self._A2
+        _A2 = torch.kron(torch.eye(self.n_agents), _A2)
+        A_lin = _A1 + self.h * _A2
+        self.register_buffer('A_lin', A_lin)
+
+        mask = torch.tensor([[0, 0], [1, 1]]).repeat(self.n_agents, 1)
+        self.register_buffer('mask', mask)
 
     def A_nonlin(self, x):
-        assert not self.linearize_plant
-        mask = torch.tensor([[0, 0], [1, 1]]).repeat(self.n_agents, 1).to(device)
+        assert not self.linear_plant
         A3 = torch.norm(
-            x.view(-1, 2 * self.n_agents, 2) * mask, dim=-1, keepdim=True
-        )               # shape = (batch_size, 4, 1)
+            x.view(-1, 2 * self.n_agents, 2) * self.mask, dim=-1, keepdim=True
+        )           # shape = (batch_size, 2 * n_agents, 1)
         A3 = torch.kron(
-            A3, torch.ones(2, 1).to(device)
-        )               # shape = (batch_size, 8, 1)
+            A3, torch.ones(2, 1, device=A3.device)
+        )           # shape = (batch_size, 4 * n_agents, 1)
         A3 = -self.b2 / self.mass * torch.diag_embed(
             A3.squeeze(dim=-1), offset=0, dim1=-2, dim2=-1
-        ).to(device)    # shape = (batch_size, 8, 8)
-        A = self._A1 + self.h * (self._A2 + A3)
-        return A
+        )           # shape = (batch_size, 4 * n_agents, 4 * n_agents)
+        A = self.A_lin + self.h * A3
+        return A    # shape = (batch_size, 4 * n_agents, 4 * n_agents)
 
-    def noiseless_forward(self, t, x, u):
+    def noiseless_forward(self, t, x: torch.Tensor, u: torch.Tensor):
         """
+        forward of the plant without the process noise.
+
         Args:
-            - x:
-        """
-        # check sizes
-        x = check_data_dim(x, vec_dim=(1, self.num_states)) #TODO
-        u = check_data_dim(u, vec_dim=(1, self.num_inputs))
-        batch_size = x.shape[0]
-        assert batch_size==u.shape[0], 'batch sizes of x and u are different.'
+            - x (torch.Tensor): plant's state at t. shape = (batch_size, 1, state_dim)
+            - u (torch.Tensor): plant's input at t. shape = (batch_size, 1, in_dim)
 
-        if self.linearize_plant:
+        Returns:
+            next state of the noise-free dynamics.
+        """
+        x = x.view(-1, 1, self.state_dim)
+        u = u.view(-1, 1, self.in_dim)
+        if self.linear_plant:
             # x is batched but A is not => can use F.linear to compute xA^T
-            f = F.linear(x - self.xbar, self.A) + F.linear(u, self.B) + self.xbar
+            f = F.linear(x - self.xbar, self.A_lin) + F.linear(u, self.B) + self.xbar
         else:
             # A depends on x, hence is batched. perform batched matrix multiplication
             f = torch.bmm(x - self.xbar, self.A_nonlin(x).transpose(1,2)) + F.linear(u, self.B) + self.xbar
-        assert f.shape==(batch_size, 1, self.num_states)
-        return f
+        return f    # shape = (batch_size, 1, state_dim)
 
     def forward(self, t, x, u, w):
-        # check sizes
-        x = check_data_dim(x, vec_dim=(1, self.num_states))#TODO
-        u = check_data_dim(u, vec_dim=(1, self.num_inputs))
-        w = check_data_dim(w, vec_dim=(1, self.num_states))
-        batch_size = x.shape[0]
-        assert batch_size==u.shape[0], 'batch sizes of x and u are different.'
-        assert batch_size==w.shape[0], 'batch sizes of w and u are different.'
+        """
+        forward of the plant with the process noise.
 
-        x_ = self.noiseless_forward(t, x, u) + w
-        assert x_.shape==x.shape
-        y = x_
-        return x_, y
+        Args:
+            - x (torch.Tensor): plant's state at t. shape = (batch_size, 1, state_dim)
+            - u (torch.Tensor): plant's input at t. shape = (batch_size, 1, in_dim)
+            - w (torch.Tensor): process noise at t. shape = (batch_size, 1, state_dim)
+
+        Returns:
+            next state.
+        """
+        return self.noiseless_forward(t, x, u) + w.view(-1, 1, self.state_dim)
 
     # simulation
     def rollout(self, controller, data, train=False):
         """
         rollout REN for rollouts of the process noise
-        - data: sequence of disturbance samples of shape
-                (batch_size, T, num_states).
+
+        Args:
+            - data: sequence of disturbance samples of shape
+                (batch_size, T, state_dim).
+
+        Rerurn:
+            - x_log of shape = (batch_size, T, state_dim)
+            - u_log of shape = (batch_size, T, in_dim)
         """
-        # check data shape to be (batch_size, T, num_states)
-        data = to_tensor(data)
-        if len(data.shape) == 1:
-            data = torch.reshape(data, (-1, 1))
-        data = check_data_dim(data, vec_dim=(None, self.num_states))
-        batch_size, T = data.shape[0], data.shape[1]
-        assert data.shape[-1] == self.num_states
 
         # init
         controller.reset()
-        x = copy.deepcopy(self.x_init)  #TODO: check shape of x_init
-        x = x.reshape(1, *x.shape).repeat(batch_size, 1, 1)
-        u = copy.deepcopy(self.u_init)
-        u = u.reshape(1, *u.shape).repeat(batch_size, 1, 1)
+        x = copy.deepcopy(self.x_init).repeat(data.shape[0], 1, 1)
+        u = copy.deepcopy(self.u_init).repeat(data.shape[0], 1, 1)
 
         # Simulate
-        for t in range(T):
-            x, _ = self(t, x, u, data[:, t:t+1, :])
-            assert x.shape==(batch_size, 1, self.num_states)
-            u = controller(x)
-            assert u.shape==(batch_size, 1, self.num_inputs)
+        for t in range(data.shape[1]):
+            x = self.forward(t=t, x=x, u=u, w=data[:, t:t+1, :])    # shape = (batch_size, 1, state_dim)
+            u = controller(x)                                       # shape = (batch_size, 1, in_dim)
+
             if t == 0:
                 x_log, u_log = x, u
             else:
                 x_log = torch.cat((x_log, x), 1)
                 u_log = torch.cat((u_log, u), 1)
-        assert x_log.shape==(batch_size, T, self.num_states)
-        assert u_log.shape==(batch_size, T, self.num_inputs)
 
         controller.reset()
         if not train:

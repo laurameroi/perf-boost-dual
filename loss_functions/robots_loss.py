@@ -1,12 +1,13 @@
 import torch
-from config import device
 from . import LQLossFH
+from config import device
 
 class RobotsLoss(LQLossFH):
     def __init__(
-        self, xbar, loss_bound, sat_bound,
-        n_agents, Q, alpha_u=1,
-        alpha_col=None, alpha_obst=None, min_dist=0.5,
+        self, xbar, Q, alpha_u=1,
+        alpha_col=None, alpha_obst=None,
+        loss_bound=None, sat_bound=None,
+        n_agents=2, min_dist=0.5,
         obstacle_centers=None, obstacle_covs=None
     ):
         super().__init__(Q=Q, R=alpha_u, loss_bound=loss_bound, sat_bound=sat_bound, xbar=xbar)
@@ -18,19 +19,22 @@ class RobotsLoss(LQLossFH):
         # define obstacles
         if obstacle_centers is None:
             self.obstacle_centers = [
-                torch.tensor([[-2.5, 0]]).to(device),
-                torch.tensor([[2.5, 0.0]]).to(device),
-                torch.tensor([[-1.5, 0.0]]).to(device),
-                torch.tensor([[1.5, 0.0]]).to(device),
+                torch.tensor([[-2.5, 0]], device=device),
+                torch.tensor([[2.5, 0.0]], device=device),
+                torch.tensor([[-1.5, 0.0]], device=device),
+                torch.tensor([[1.5, 0.0]], device=device),
             ]
         else:
             self.obstacle_centers = obstacle_centers
         if obstacle_covs is None:
             self.obstacle_covs = [
-                torch.tensor([[0.2, 0.2]]).to(device)
+                torch.tensor([[0.2, 0.2]], device=device)
             ] * len(self.obstacle_centers)
         else:
             self.obstacle_covs = obstacle_covs
+
+        # mask
+        self.mask = torch.logical_not(torch.eye(self.n_agents, device=device))   # shape = (n_agents, n_agents)
 
     def forward(self, xs, us):
         '''
@@ -124,8 +128,7 @@ class RobotsLoss(LQLossFH):
         # compute pairwise distances
         distance_sq = self.get_pairwise_distance_sq(x_batch)              # shape = (S, T, n_agents, n_agents)
         # compute and sum up loss when two agents are too close
-        mask = torch.logical_not(torch.eye(self.n_agents).to(device))   # shape = (n_agents, n_agents)
-        loss_ca = (1/(distance_sq + 1e-3) * (distance_sq.detach() < (min_sec_dist ** 2)) * mask).sum((-1, -2))/2        # shape = (S, T)
+        loss_ca = (1/(distance_sq + 1e-3) * (distance_sq.detach() < (min_sec_dist ** 2)) * self.mask).sum((-1, -2))/2        # shape = (S, T)
         # average over time steps
         loss_ca = loss_ca.sum(1)/loss_ca.shape[1]
         # reshape to S,1,1
@@ -187,7 +190,6 @@ def normpdf(q, mu, cov): #TODO
     mu = mu.view(1, d)
     cov = cov.view(1, d)  # the diagonal of the covariance matrix
     qs = torch.split(q, 2, dim=-1)
-    # out = torch.tensor(0).to(device)
     for ind, qi in enumerate(qs):
         # if qi[1]<1.5 and qi[1]>-1.5:
         den = (2*torch.pi)**(0.5*d) * torch.sqrt(torch.prod(cov))

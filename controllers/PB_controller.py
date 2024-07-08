@@ -1,42 +1,44 @@
 import torch, copy
 import torch.nn as nn
-from config import device
 import numpy as np
 
-from .acyclic_ren import AcyclicREN
+from config import device
+from .contractive_ren import ContractiveREN
 from assistive_functions import to_tensor
 
-class RENController(nn.Module):
+class PerfBoostController(nn.Module):
     """
-    TODO: add description
-    TODO: change class name?
-    state-feedback controller with stability guarantees.
-    NOTE: controller has input "u", output "y", and internal state "x". When used in closed-loop,
-        the controller input "u" would be the measured state and the controller output ("y")
-        would be the input to the plant. The internal state of the controller should not be mistaken
-        with the internal state of the plant.
+    Performance boosting controller, following the paper:
+        "Learning to Boost the Performance of Stable Nonlinear Systems".
+    Implements a state-feedback controller with stability guarantees.
+    NOTE: When used in closed-loop, the controller input is the measured state
+        of the plant and the controller output is the input to the plant.
+        This controller has a memory for the last input ("self.last_input") and
+        the last output ("self.last_output").
     """
     def __init__(
-        self, noiseless_forward, input_init, output_init,
+        self, noiseless_forward, input_init: torch.Tensor, output_init: torch.Tensor,
         # acyclic REN properties
-        dim_internal: int, l: int,
+        dim_internal: int, dim_nl: int,
         initialization_std: float = 0.5,
         posdef_tol: float = 0.001, contraction_rate_lb: float = 1.0,
+        ren_internal_state_init = None,
         # misc
         output_amplification: float=20,
     ):
         """
          Args:
             noiseless_forward: system dynamics without process noise. can be TV.
-            input_init: initial input to the controller.
-            output_init: initial output from the controller before anything is calculated.
+            input_init (torch.Tensor): initial input to the controller.
+            output_init (torch.Tensor): initial output from the controller before anything is calculated.
             output_amplification (float): TODO
             * the following are the same as AcyclicREN args:
             dim_internal (int): Internal state (x) dimension. This state evolves with contraction properties.
-            l (int): Complexity of the implicit layer.
+            dim_nl (int): Dimension of the input ("v") and ouput ("w") of the nonlinear static block of REN.
             initialization_std (float, optional): Weight initialization. Set to 0.1 by default.
             epsilon (float, optional): Positive and negligible scalar to force positive definite matrices.
             contraction_rate_lb (float, optional): Lower bound on the contraction rate. Defaults to 1.
+            ren_internal_state_init (torch.Tensor, optional): initial state of the REN. Defaults to 0 when None.
         """
         super().__init__()
 
@@ -51,16 +53,15 @@ class RENController(nn.Module):
         self.dim_out = self.output_init.shape[-1]
 
         # define the REN
-        self.psi_u = AcyclicREN(
+        self.c_ren = ContractiveREN(
             dim_in=self.dim_in, dim_out=self.dim_out, dim_internal=dim_internal,
-            l=l, initialization_std=initialization_std,
-            internal_state_init=None,   # initialize at 0
+            dim_nl=dim_nl, initialization_std=initialization_std,
+            internal_state_init=ren_internal_state_init,
             posdef_tol=posdef_tol, contraction_rate_lb=contraction_rate_lb
-        )
+        ).to(device)
 
         # define the system dynamics without process noise
         self.noiseless_forward = noiseless_forward
-
 
         self.reset()
 
@@ -71,25 +72,20 @@ class RENController(nn.Module):
         self.t = 0  # time
         self.last_input = copy.deepcopy(self.input_init)
         self.last_output = copy.deepcopy(self.output_init)
-        self.psi_u.x = torch.zeros(1, self.psi_u.dim_internal, device=device)   # set the internal state to 0
+        self.c_ren.x = self.c_ren.init_x    # reset the REN state to the initial value
 
 
-    def forward(self, u_in: torch.Tensor):
+    def forward(self, input_t: torch.Tensor):
         """
         Forward pass of the controller.
 
         Args:
-            u_in (torch.Tensor): Input with the size of (batch_size, 1, self.dim_in).
-            NOTE: when used in closed-loop, "u_in" is the measured states.
+            input_t (torch.Tensor): Input with the size of (batch_size, 1, self.dim_in).
+            NOTE: when used in closed-loop, "input_t" is the measured states.
 
         Return:
             y_out (torch.Tensor): Output with (batch_size, 1, self.dim_out).
         """
-        # batch u_in to (batch_size, dim_in, 1)
-        if len(u_in.shape)<=2:
-            u_in = u_in.reshape(1, 1, -1)
-        else:
-            assert len(u_in.shape)==3
 
         # apply noiseless forward to get noise less input (noise less state of the plant)
         u_noiseless = self.noiseless_forward(
@@ -99,34 +95,33 @@ class RENController(nn.Module):
         ) # shape = (self.batch_size, 1, self.dim_in)
 
         # reconstruct the noise
-        w_ = u_in - u_noiseless # shape = (self.batch_size, 1, self.dim_in)
+        w_ = input_t - u_noiseless # shape = (self.batch_size, 1, self.dim_in)
 
         # apply REN
-        output = self.psi_u.forward(w_)
+        output = self.c_ren.forward(w_)
         output = output*self.output_amplification   # shape = (self.batch_size, 1, self.dim_out)
 
-        # assert xi_.shape==(self.batch_size, 1, self.psi_u.dim_internal), xi_.shape
         # update internal states
-        self.last_input, self.last_output = u_in, output
+        self.last_input, self.last_output = input_t, output
         self.t += 1
         return output
 
     # setters and getters
     def get_parameter_shapes(self):
-        return self.psi_u.get_parameter_shapes()
+        return self.c_ren.get_parameter_shapes()
 
     def get_named_parameters(self):
-        return self.psi_u.get_named_parameters()
+        return self.c_ren.get_named_parameters()
 
     def get_parameters_as_vector(self):
         # TODO: implement without numpy
-        return np.concatenate([p.detach().clone().cpu().numpy().flatten() for p in self.psi_u.parameters()])
+        return np.concatenate([p.detach().clone().cpu().numpy().flatten() for p in self.c_ren.parameters()])
 
     def set_parameter(self, name, value):
-        current_val = getattr(self.psi_u, name)
+        current_val = getattr(self.c_ren, name)
         value = torch.nn.Parameter(value.reshape(current_val.shape))
-        setattr(self.psi_u, name, value)
-        self.psi_u.update_model_param()    # update dependent params
+        setattr(self.c_ren, name, value)
+        self.c_ren._update_model_param()    # update dependent params
 
     def set_parameters(self, param_dict):
         for name, value in param_dict.items():

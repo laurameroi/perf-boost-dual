@@ -1,2 +1,2 @@
-from .acyclic_ren import AcyclicREN
-from .REN_controller import RENController
+from .contractive_ren import ContractiveREN
+from .PB_controller import PerfBoostController

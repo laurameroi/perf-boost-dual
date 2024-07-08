@@ -1,11 +1,15 @@
 import torch
 from assistive_functions import to_tensor
 
+from config import device
+
 class LQLossFH():
-    def __init__(self, Q, R, loss_bound, sat_bound, xbar=None):
+    def __init__(self, Q, R, loss_bound=None, sat_bound=None, xbar=None):
         self.Q, self.R = Q, R
-        self.Q = to_tensor(self.Q)
+        self.Q = to_tensor(self.Q).to(device)
         self.R = to_tensor(self.R)
+        if isinstance(self.R, torch.Tensor):     # cast to device if is not a scalar
+            self.R = self.R.to(device)
         assert len(self.Q.shape)==2 and self.Q.shape[0] == self.Q.shape[1]
         assert (not hasattr(self.R, "__len__")) or len(self.R.shape)==2  # int or square matrix
         self.loss_bound, self.sat_bound = loss_bound, sat_bound
@@ -17,7 +21,7 @@ class LQLossFH():
             self.sat_bound = to_tensor(self.sat_bound)
         self.xbar = xbar
         if not self.xbar is None:
-            self.xbar = to_tensor(self.xbar)
+            self.xbar = to_tensor(self.xbar).to(device)
             self.xbar = self.xbar.reshape(self.Q.shape[0], 1)
 
     def forward(self, xs, us):

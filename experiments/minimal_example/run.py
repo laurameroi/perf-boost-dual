@@ -10,7 +10,7 @@ from config import device
 from arg_parser import argument_parser, print_args
 from plants import SystemRobots, RobotsDataset
 from plot_functions import *
-from controllers import RENController
+from controllers import PerfBoostController
 from loss_functions import RobotsLoss
 from assistive_functions import WrapLogger
 
@@ -33,12 +33,12 @@ torch.manual_seed(args.random_seed)
 # ------------ 1. Dataset ------------
 dataset = RobotsDataset(random_seed=args.random_seed, horizon=args.horizon, std_ini=args.std_init_plant, n_agents=2)
 # divide to train and test
-train_data = dataset.train_data_full[:args.num_rollouts, :, :]
-test_data = dataset.test_data
+train_data = dataset.train_data_full[:args.num_rollouts, :, :].to(device)
+test_data = dataset.test_data.to(device)
 # data for plots
 t_ext = args.horizon * 4
-plot_data = torch.zeros(t_ext, train_data.shape[-1], device=device)
-plot_data[0, :] = (dataset.x0.detach() - dataset.xbar)
+plot_data = torch.zeros(1, t_ext, train_data.shape[-1], device=device)
+plot_data[:, 0, :] = (dataset.x0.detach() - dataset.xbar)
 plot_data = plot_data.to(device)
 # batch the data
 train_dataloader = DataLoader(train_data, batch_size=64, shuffle=True)
@@ -48,17 +48,17 @@ plant_input_init = None     # all zero
 plant_state_init = None     # same as xbar
 sys = SystemRobots(
     xbar=dataset.xbar, x_init=plant_state_init,
-    u_init=plant_input_init, linearize_plant=args.linearize_plant, k=args.spring_const
-)
+    u_init=plant_input_init, linear_plant=args.linearize_plant, k=args.spring_const
+).to(device)
 
 # ------------ 3. Controller ------------
-ctl = RENController(
+ctl = PerfBoostController(
     noiseless_forward=sys.noiseless_forward,
     input_init=sys.x_init, output_init=sys.u_init,
-    dim_internal=args.dim_internal, l=args.l,
+    dim_internal=args.dim_internal, dim_nl=args.l,
     initialization_std=args.cont_init_std,
     output_amplification=20,
-)
+).to(device)
 # plot closed-loop trajectories before training the controller
 logger.info('Plotting closed-loop trajectories before training the controller...')
 x_log, _, u_log = sys.rollout(ctl, plot_data)
@@ -100,7 +100,6 @@ for epoch in range(1+args.epochs):
         # take a step
         loss.backward()
         optimizer.step()
-        ctl.psi_u.update_model_param()
 
     # print info
     if epoch%args.log_epoch==0:
@@ -131,7 +130,7 @@ if args.return_best:
 
 # ------ 7. Save and evaluate the trained model ------
 # save
-res_dict = ctl.psi_u.state_dict()
+res_dict = ctl.c_ren.state_dict()
 # TODO: append args
 res_dict['Q'] = Q
 filename = os.path.join(save_folder, 'trained_controller'+'.pt')
@@ -139,7 +138,7 @@ torch.save(res_dict, filename)
 logger.info('[INFO] saved trained model.')
 
 # evaluate on the train data
-logger.info('\n[INFO] evaluating the trained controller on %i test rollouts.' % train_data.shape[0])
+logger.info('\n[INFO] evaluating the trained controller on %i training rollouts.' % train_data.shape[0])
 with torch.no_grad():
     x_log, _, u_log = sys.rollout(
         controller=ctl, data=train_data, train=False,
