@@ -13,11 +13,11 @@ class RobotsDataset(Dataset):
 
         # initial state TODO: set as arg
         self.x0 = torch.tensor([2., -2, 0, 0,
-                        -2, -2, 0, 0,
-                        ])
+                                -2, -2, 0, 0,
+                                ])
         self.xbar = torch.tensor([-2, 2, 0, 0,
-                            2., 2, 0, 0,
-                        ])
+                                  2., 2, 0, 0,
+                                  ])
 
         # file name and path
         file_path = os.path.join(BASE_DIR, 'experiments', 'minimal_example', 'saved_results')
@@ -31,10 +31,10 @@ class RobotsDataset(Dataset):
         self._load_data()
 
     def __len__(self):
-        return len(self.data.shape[0])
+        return self.train_data_full.shape[0]
 
     def __getitem__(self, idx):
-        return self.data[idx, :, :]
+        return self.train_data_full[idx, :, :]
 
     # ---- data generation ----
     def _generate_data(self):
