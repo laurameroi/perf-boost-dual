@@ -42,7 +42,7 @@ plot_data = torch.zeros(1, t_ext, train_data.shape[-1], device=device)
 plot_data[:, 0, :] = (dataset.x0.detach() - dataset.xbar)
 plot_data = plot_data.to(device)
 # batch the data
-train_dataloader = DataLoader(train_data, batch_size=64, shuffle=True)
+train_dataloader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
 
 # ------------ 2. Plant ------------
 plant_input_init = None     # all zero
