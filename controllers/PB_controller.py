@@ -1,4 +1,4 @@
-import torch, copy
+import torch
 import torch.nn as nn
 import numpy as np
 
@@ -71,8 +71,8 @@ class PerfBoostController(nn.Module):
         set time to 0 and reset to initial state.
         """
         self.t = 0  # time
-        self.last_input = copy.deepcopy(self.input_init)
-        self.last_output = copy.deepcopy(self.output_init)
+        self.last_input = self.input_init.detach().clone()
+        self.last_output = self.output_init.detach().clone()
         self.c_ren.x = self.c_ren.init_x    # reset the REN state to the initial value
 
     def forward(self, input_t: torch.Tensor):

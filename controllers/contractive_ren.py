@@ -1,4 +1,4 @@
-import torch, copy
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from collections import OrderedDict
@@ -62,7 +62,7 @@ class ContractiveREN(nn.Module):
         else:
             assert isinstance(internal_state_init, torch.Tensor)
             self.x = internal_state_init.reshape(1, 1, self.dim_internal)
-        self.register_buffer('init_x', copy.deepcopy(self.x))
+        self.register_buffer('init_x', self.x.detach().clone())
 
         # define matrices shapes
         # auxiliary matrices

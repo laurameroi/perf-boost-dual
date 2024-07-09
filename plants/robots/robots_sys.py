@@ -1,4 +1,4 @@
-import torch, copy
+import torch
 import torch.nn.functional as F
 
 
@@ -20,7 +20,7 @@ class SystemRobots(torch.nn.Module):
 
         # initial state
         self.register_buffer('xbar', xbar.reshape(1, -1))  # shape = (1, state_dim)
-        x_init = copy.deepcopy(self.xbar) if x_init is None else x_init.reshape(1, -1)   # shape = (1, state_dim)
+        x_init = self.xbar.detach().clone() if x_init is None else x_init.reshape(1, -1)   # shape = (1, state_dim)
         self.register_buffer('x_init', x_init)
         u_init = torch.zeros(1, int(self.xbar.shape[1]/2)) if u_init is None else u_init.reshape(1, -1)   # shape = (1, in_dim)
         self.register_buffer('u_init', u_init)
@@ -125,8 +125,8 @@ class SystemRobots(torch.nn.Module):
 
         # init
         controller.reset()
-        x = copy.deepcopy(self.x_init).repeat(data.shape[0], 1, 1)
-        u = copy.deepcopy(self.u_init).repeat(data.shape[0], 1, 1)
+        x = self.x_init.detach().clone().repeat(data.shape[0], 1, 1)
+        u = self.u_init.detach().clone().repeat(data.shape[0], 1, 1)
 
         # Simulate
         for t in range(data.shape[1]):
