@@ -42,8 +42,8 @@ class RobotsLoss(LQLossFH):
         Compute loss.
 
         Args:
-            - xs: tensor of shape (S, T, num_states)
-            - us: tensor of shape (S, T, num_inputs)
+            - xs: tensor of shape (S, T, state_dim)
+            - us: tensor of shape (S, T, in_dim)
 
         Return:
             - loss of shape (1, 1).
@@ -93,7 +93,7 @@ class RobotsLoss(LQLossFH):
         Obstacle avoidance loss.
 
         Args:
-            - x_batched: tensor of shape (S, T, num_states, 1)
+            - x_batched: tensor of shape (S, T, state_dim, 1)
                 concatenated states of all agents on the third dimension.
 
         Return:
@@ -118,7 +118,7 @@ class RobotsLoss(LQLossFH):
         Collision avoidance loss.
 
         Args:
-            - x_batched: tensor of shape (S, T, num_states, 1)
+            - x_batched: tensor of shape (S, T, state_dim, 1)
                 concatenated states of all agents on the third dimension.
 
 
@@ -141,7 +141,7 @@ class RobotsLoss(LQLossFH):
         Count the number of collisions between agents.
 
         Args:
-            - x_batched: tensor of shape (S, T, num_states, 1)
+            - x_batched: tensor of shape (S, T, state_dim, 1)
                 concatenated states of all agents on the third dimension.
 
         Return:
@@ -159,16 +159,16 @@ class RobotsLoss(LQLossFH):
         Squared distance between pairwise agents.
 
         Args:
-            - x_batched: tensor of shape (S, T, num_states, 1)
+            - x_batched: tensor of shape (S, T, state_dim, 1)
                 concatenated states of all agents on the third dimension.
 
         Return:
             - matrix of shape (S, T, n_agents, n_agents) of squared pairwise distances.
         """
-        num_states_per_agent = int(x_batch.shape[2]/self.n_agents)
+        state_dim_per_agent = int(x_batch.shape[2]/self.n_agents)
         # collision avoidance:
-        x_agents = x_batch[:, :, 0::num_states_per_agent, :]  # start from 0, pick every num_states_per_agent. shape = (S, T, n_agents, 1)
-        y_agents = x_batch[:, :, 1::num_states_per_agent, :]  # start from 1, pick every num_states_per_agent. shape = (S, T, n_agents, 1)
+        x_agents = x_batch[:, :, 0::state_dim_per_agent, :]  # start from 0, pick every state_dim_per_agent. shape = (S, T, n_agents, 1)
+        y_agents = x_batch[:, :, 1::state_dim_per_agent, :]  # start from 1, pick every state_dim_per_agent. shape = (S, T, n_agents, 1)
         deltaqx = x_agents.repeat(1, 1, 1, self.n_agents) - x_agents.repeat(1, 1, 1, self.n_agents).transpose(-2, -1)   # shape = (S, T, n_agents, n_agents)
         deltaqy = y_agents.repeat(1, 1, 1, self.n_agents) - y_agents.repeat(1, 1, 1, self.n_agents).transpose(-2, -1)   # shape = (S, T, n_agents, n_agents)
         distance_sq = deltaqx ** 2 + deltaqy ** 2             # shape = (S, T, n_agents, n_agents)
@@ -180,7 +180,7 @@ def normpdf(q, mu, cov):  #TODO
     PDF of normal distribution with mean "mu" and covariance "cov".
 
     Args:
-        - q: shape(S, T, num_states_per_agent)
+        - q: shape(S, T, state_dim_per_agent)
         - mu:
         - cov:
 

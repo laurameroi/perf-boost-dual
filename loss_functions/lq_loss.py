@@ -29,8 +29,8 @@ class LQLossFH():
         """
         compute loss
         Args:
-            - xs: tensor of shape (S, T, num_states)
-            - us: tensor of shape (S, T, num_inputs)
+            - xs: tensor of shape (S, T, state_dim)
+            - us: tensor of shape (S, T, in_dim)
         """
         if self.xbar is not None:
             xs = xs - self.xbar.repeat(xs.shape[0], 1, 1)

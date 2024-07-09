@@ -42,15 +42,15 @@ class RobotsDataset(Dataset):
 
         # train data
         num_rollouts_big = 500      # generate 500 sequences, select as many as needed in the exp
-        num_states = 4*self.n_agents
-        self.train_data_full = torch.zeros(num_rollouts_big, self.horizon, num_states)
+        state_dim = 4*self.n_agents
+        self.train_data_full = torch.zeros(num_rollouts_big, self.horizon, state_dim)
         for rollout_num in range(num_rollouts_big):
             self.train_data_full[rollout_num, 0, :] = \
                 (self.x0 - self.xbar) + self.std_ini * torch.randn(self.x0.shape)
 
         # test data
         num_rollouts_test = 500  # number of rollouts in the test data
-        self.test_data = torch.zeros(num_rollouts_test, self.horizon, num_states)
+        self.test_data = torch.zeros(num_rollouts_test, self.horizon, state_dim)
         for rollout_num in range(num_rollouts_test):
             self.test_data[rollout_num, 0, :] = \
                 (self.x0 - self.xbar) + self.std_ini * torch.randn(self.x0.shape)
