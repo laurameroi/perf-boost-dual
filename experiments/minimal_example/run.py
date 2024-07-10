@@ -34,8 +34,8 @@ torch.manual_seed(args.random_seed)
 # ------------ 1. Dataset ------------
 dataset = RobotsDataset(random_seed=args.random_seed, horizon=args.horizon, std_ini=args.std_init_plant, n_agents=2)
 # divide to train and test
-train_data = dataset.train_data_full[:args.num_rollouts, :, :].to(device)
-test_data = dataset.test_data.to(device)
+train_data, test_data = dataset.get_data(num_train_samples=args.num_rollouts, num_test_samples=500)
+train_data, test_data = train_data.to(device), test_data.to(device)
 # data for plots
 t_ext = args.horizon * 4
 plot_data = torch.zeros(1, t_ext, train_data.shape[-1], device=device)
