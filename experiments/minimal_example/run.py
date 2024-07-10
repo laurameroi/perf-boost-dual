@@ -8,7 +8,7 @@ sys.path.insert(1, BASE_DIR)
 
 from config import device
 from arg_parser import argument_parser, print_args
-from plants import SystemRobots, RobotsDataset
+from plants import RobotsSystem, RobotsDataset
 from plot_functions import *
 from controllers import PerfBoostController
 from loss_functions import RobotsLoss
@@ -47,7 +47,7 @@ train_dataloader = DataLoader(train_data, batch_size=args.batch_size, shuffle=Tr
 # ------------ 2. Plant ------------
 plant_input_init = None     # all zero
 plant_state_init = None     # same as xbar
-sys = SystemRobots(
+sys = RobotsSystem(
     xbar=dataset.xbar, x_init=plant_state_init,
     u_init=plant_input_init, linear_plant=args.linearize_plant, k=args.spring_const
 ).to(device)

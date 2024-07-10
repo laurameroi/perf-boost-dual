@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 
-class SystemRobots(torch.nn.Module):
+class RobotsSystem(torch.nn.Module):
     def __init__(self, xbar: torch.Tensor, linear_plant: bool, x_init=None, u_init=None, k: float=1.0):
         """
 

@@ -3,7 +3,7 @@ import argparse, math
 
 # argument parser
 def argument_parser():
-    parser = argparse.ArgumentParser(description="Training ren for learning contractive motion through imitation.")
+    parser = argparse.ArgumentParser(description="Robots minimal experiment.")
 
     # experiment
     parser.add_argument('--random-seed', type=int, default=5, help='Random seed. Default is 5.')
