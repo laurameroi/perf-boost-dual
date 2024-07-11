@@ -56,7 +56,7 @@ sys = RobotsSystem(
 ctl = PerfBoostController(
     noiseless_forward=sys.noiseless_forward,
     input_init=sys.x_init, output_init=sys.u_init,
-    dim_internal=args.dim_internal, dim_nl=args.l,
+    dim_internal=args.dim_internal, dim_nl=args.dim_l,
     initialization_std=args.cont_init_std,
     output_amplification=20,
 ).to(device)
