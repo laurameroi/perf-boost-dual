@@ -1,27 +1,22 @@
 import torch, os
-from scipy.stats import multivariate_normal  # TODO: use something compatible with tensors
+from scipy.stats import multivariate_normal # TODO: use something compatible with tensors
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
 def plot_trajectories(
-    x, xbar, n_agents, text="", save=True, filename='', T=100, obst=False,
+    x, xbar, n_agents, save_folder, text="", save=True, filename='', T=100,
     dots=False, circles=False, axis=False, min_dist=1, f=5,
     obstacle_centers=None, obstacle_covs=None
 ):
-    filename = filename if filename == '' else filename+'_'
-    now = datetime.now()
-    formatted_date = now.strftime('%m-%d-%H:%M')
+    filename = 'trajectories.pdf' if filename == '' else filename
 
     # fig = plt.figure(f)
     fig, ax = plt.subplots(figsize=(f,f))
     # plot obstacles
-    if obstacle_covs is not None:
-        assert obstacle_centers is not None
+    if not obstacle_covs is None:
+        assert not obstacle_centers is None
         yy, xx = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
         zz = xx * 0
         for center, cov in zip(obstacle_centers, obstacle_covs):
@@ -76,16 +71,14 @@ def plot_trajectories(
     ax.axes.yaxis.set_visible(axis)
     if save:
         fig.savefig(
-            os.path.join(
-                BASE_DIR, 'experiments', 'robotsX', 'saved_results',
-                filename+'_trajectories' + formatted_date +'.pdf'
-            ),
+            os.path.join(save_folder, filename),
             format='pdf'
         )
-    plt.show()
+    else:
+        plt.show()
 
 
-def plot_traj_vs_time(t_end, n_agents, x, u=None, text="", save=True, filename=''):
+def plot_traj_vs_time(t_end, n_agents, save_folder, x, u=None, text="", save=True, filename=''):
     filename = filename if filename=='' else filename+'_'
     now = datetime.now()
     formatted_date = now.strftime('%m-%d-%H:%M')
@@ -118,11 +111,10 @@ def plot_traj_vs_time(t_end, n_agents, x, u=None, text="", save=True, filename='
     if save:
         plt.savefig(
             os.path.join(
-                BASE_DIR, 'experiments', 'robotsX', 'saved_results',
-                filename+text+'_x_u' + formatted_date +'.pdf'
+                save_folder,
+                filename+text+'_x_u.pdf'
             ),
             format='pdf'
         )
-
     else:
         plt.show()

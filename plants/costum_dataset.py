@@ -2,7 +2,7 @@ import torch, os, pickle
 from torch.utils.data import Dataset
 
 from config import BASE_DIR
-
+from assistive_functions import to_tensor
 
 class CostumDataset(Dataset):
     '''
@@ -63,6 +63,8 @@ class CostumDataset(Dataset):
         filehandler = open(self.file_name, 'rb')
         self._data = pickle.load(filehandler)
         filehandler.close()
+        # convert numpy to tensor
+        self._data = to_tensor(self._data)
 
     def __len__(self):
         return self._data['train_data_full'].shape[0]

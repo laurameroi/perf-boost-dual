@@ -60,14 +60,6 @@ ctl = PerfBoostController(
     initialization_std=args.cont_init_std,
     output_amplification=20,
 ).to(device)
-# plot closed-loop trajectories before training the controller
-logger.info('Plotting closed-loop trajectories before training the controller...')
-x_log, _, u_log = sys.rollout(ctl, plot_data)
-filename = os.path.join(save_folder, 'CL_init.pdf')
-plot_trajectories(
-    x_log[0, :, :], # remove extra dim due to batching
-    dataset.xbar, sys.n_agents, filename=filename, text="CL - before training", T=t_ext
-)
 
 # ------------ 4. Loss ------------
 Q = torch.kron(torch.eye(args.n_agents), torch.eye(4)).to(device)   # TODO: move to args and print info
@@ -85,6 +77,17 @@ assert not (valid_data is None and args.return_best)
 optimizer = torch.optim.Adam(ctl.parameters(), lr=args.lr)
 
 # ------------ 6. Training ------------
+# plot closed-loop trajectories before training the controller
+logger.info('Plotting closed-loop trajectories before training the controller...')
+x_log, _, u_log = sys.rollout(ctl, plot_data)
+plot_trajectories(
+    x_log[0, :, :], # remove extra dim due to batching
+    xbar=dataset.xbar, n_agents=sys.n_agents,
+    save_folder=save_folder, filename='CL_init.pdf',
+    text="CL - before training", T=t_ext,
+    obstacle_centers=loss_fn.obstacle_centers,
+    obstacle_covs=loss_fn.obstacle_covs
+)
 logger.info('\n------------ Begin training ------------')
 best_valid_loss = 1e6
 t = time.time()
@@ -172,10 +175,11 @@ logger.info(msg)
 # plot closed-loop trajectories using the trained controller
 logger.info('Plotting closed-loop trajectories using the trained controller...')
 x_log, _, u_log = sys.rollout(ctl, plot_data)
-filename = os.path.join(save_folder, 'CL_trained.pdf')
 plot_trajectories(
-    x_log[0, :, :],  # remove extra dim due to batching
-    dataset.xbar, sys.n_agents, filename=filename, text="CL - trained controller", T=t_ext,
+    x_log[0, :, :], # remove extra dim due to batching
+    xbar=dataset.xbar, n_agents=sys.n_agents,
+    save_folder=save_folder, filename='CL_trained.pdf',
+    text="CL - trained controller", T=t_ext,
     obstacle_centers=loss_fn.obstacle_centers,
     obstacle_covs=loss_fn.obstacle_covs
 )
