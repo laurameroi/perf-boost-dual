@@ -11,7 +11,7 @@ sys.path.insert(1, BASE_DIR)
 from config import device
 from arg_parser import argument_parser, print_args
 from plants import LTIDataset
-from assistive_functions import WrapLogger
+from utils.assistive_functions import WrapLogger
 
 
 # ----- SET UP LOGGER -----

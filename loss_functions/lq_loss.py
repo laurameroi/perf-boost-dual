@@ -1,5 +1,5 @@
 import torch
-from assistive_functions import to_tensor
+from utils.assistive_functions import to_tensor
 
 from config import device
 

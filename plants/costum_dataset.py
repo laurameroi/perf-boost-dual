@@ -2,7 +2,7 @@ import torch, os, pickle
 from torch.utils.data import Dataset
 
 from config import BASE_DIR
-from assistive_functions import to_tensor
+from utils.assistive_functions import to_tensor
 
 class CostumDataset(Dataset):
     '''
