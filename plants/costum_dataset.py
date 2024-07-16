@@ -48,7 +48,9 @@ class CostumDataset(Dataset):
         test_data = self._generate_data(1024)
         # save
         filehandler = open(self.file_name, 'wb')
-        pickle.dump({'train_data_full': train_data_full, 'test_data': test_data}, filehandler)
+        pickle.dump({'train_data_full': train_data_full.detach().cpu(),
+                     'test_data': test_data.detach().cpu()},
+                    filehandler)
         filehandler.close()
 
     def _load_data(self):
