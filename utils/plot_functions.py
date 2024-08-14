@@ -74,6 +74,7 @@ def plot_trajectories(
             os.path.join(save_folder, filename),
             format='pdf'
         )
+        plt.close()
     else:
         plt.show()
 
@@ -116,5 +117,6 @@ def plot_traj_vs_time(t_end, n_agents, save_folder, x, u=None, text="", save=Tru
             ),
             format='pdf'
         )
+        plt.close()
     else:
         plt.show()
