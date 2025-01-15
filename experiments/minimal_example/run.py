@@ -1,11 +1,10 @@
-import sys, os, logging, torch, time
+import os
+import logging
+import torch
+import time
+import copy
 from datetime import datetime
 from torch.utils.data import DataLoader
-import copy
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-print(BASE_DIR)
-sys.path.insert(1, BASE_DIR)
 
 from config import device
 from arg_parser import argument_parser, print_args
@@ -21,9 +20,10 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 # ----- Overwriting arguments -----  # TODO: remove and put it in argsparse
 args = argument_parser()
 args.random_seed = 8
-args.epochs = 500  # 5000
+args.epochs = 2  # 5000
 args.log_epoch = args.epochs//10 if args.epochs//10 > 0 else 1
-args.nn_type = "REN"
+args.nn_type = "SSM"
+args.non_linearity = "tanh"  # "hamiltonian"  # "coupling_layers"
 args.batch_size = 1
 
 # ----- SET UP LOGGER -----
@@ -57,10 +57,12 @@ train_dataloader = DataLoader(train_data, batch_size=args.batch_size, shuffle=Tr
 # ------------ 2. Plant ------------
 plant_input_init = None     # all zero
 plant_state_init = None     # same as xbar
-sys = RobotsSystem(
-    xbar=dataset.xbar, x_init=plant_state_init,
-    u_init=plant_input_init, linear_plant=args.linearize_plant, k=args.spring_const
-).to(device)
+sys = RobotsSystem(xbar=dataset.xbar,
+                   x_init=plant_state_init,
+                   u_init=plant_input_init,
+                   linear_plant=args.linearize_plant,
+                   k=args.spring_const
+                   ).to(device)
 
 # ------------ 3. Controller ------------
 ctl = PerfBoostController(noiseless_forward=sys.noiseless_forward,
@@ -71,7 +73,7 @@ ctl = PerfBoostController(noiseless_forward=sys.noiseless_forward,
                           dim_internal=args.dim_internal,
                           dim_nl=args.dim_nl,
                           initialization_std=args.cont_init_std,
-                          output_amplification=20,
+                          output_amplification=1,  # TODO: Note that this used to be 20!
                           ).to(device)
 # plot closed-loop trajectories before training the controller
 logger.info('Plotting closed-loop trajectories before training the controller...')
@@ -79,8 +81,7 @@ x_log, _, u_log = sys.rollout(ctl, plot_data)
 filename = os.path.join(save_folder, 'CL_init.pdf')
 plot_trajectories(
     x_log[0, :, :],  # remove extra dim due to batching
-    xbar=dataset.xbar, n_agents=sys.n_agents,
-    filename=filename, text="CL - before training", T=t_ext
+    dataset.xbar, sys.n_agents, filename=filename, text="CL - before training", T=t_ext
 )
 plot_traj_vs_time(args.horizon, sys.n_agents, x_log[0, :args.horizon, :], u_log[0, :args.horizon, :], save=False)
 total_n_params = sum(p.numel() for p in ctl.parameters() if p.requires_grad)
@@ -122,8 +123,8 @@ for epoch in range(1+args.epochs):
         optimizer.step()
 
     # print info
-    if epoch%args.log_epoch == 0:
-        msg = 'Epoch: %i --- train loss: %.2f'% (epoch, loss)
+    if epoch % args.log_epoch == 0:
+        msg = 'Epoch: %i --- train loss: %.2f' % (epoch, loss)
 
         if args.return_best:
             # rollout the current controller on the valid data
@@ -135,14 +136,19 @@ for epoch in range(1+args.epochs):
                 loss_valid = loss_fn.forward(x_log_valid, u_log_valid)
             msg += ' ---||--- validation loss: %.2f' % (loss_valid.item())
             # compare with the best valid loss
-            if loss_valid.item()<best_valid_loss:
+            if loss_valid.item() < best_valid_loss:
                 best_valid_loss = loss_valid.item()
                 best_params = copy.deepcopy(ctl.state_dict())
                 # ctl.get_parameters_as_vector()  # record state dict if best on valid
                 msg += ' (best so far)'
         duration = time.time() - t
-        msg += ' ---||--- time: %.0f s' % (duration)
+        msg += ' ---||--- time: %.0f s' % duration
         logger.info(msg)
+        # plot trajectory
+        plot_trajectories(
+            x_log_valid[0, :, :],  # remove extra dim due to batching
+            dataset.xbar, sys.n_agents, filename=filename, text="CL - at epoch %i" % epoch, T=t_ext
+        )
         t = time.time()
 
 # set to best seen during training
@@ -167,7 +173,7 @@ with torch.no_grad():
     )   # use the entire train data, not a batch
     # evaluate losses
     loss = loss_fn.forward(x_log, u_log)
-    msg = 'Loss: %.4f' % (loss)
+    msg = 'Loss: %.4f' % loss
 # count collisions
 if args.col_av:
     num_col = loss_fn.count_collisions(x_log)
@@ -183,7 +189,7 @@ with torch.no_grad():
     )
     # loss
     test_loss = loss_fn.forward(x_log, u_log).item()
-    msg = "Loss: %.4f" % (test_loss)
+    msg = "Loss: %.4f" % test_loss
 # count collisions
 if args.col_av:
     num_col = loss_fn.count_collisions(x_log)
@@ -195,10 +201,8 @@ logger.info('Plotting closed-loop trajectories using the trained controller...')
 x_log, _, u_log = sys.rollout(ctl, plot_data)
 filename = os.path.join(save_folder, 'CL_trained.pdf')
 plot_trajectories(
-    x_log[0, :, :], # remove extra dim due to batching
-    xbar=dataset.xbar, n_agents=sys.n_agents,
-    filename=filename,
-    text="CL - trained controller", T=t_ext,
+    x_log[0, :, :],  # remove extra dim due to batching
+    dataset.xbar, sys.n_agents, filename=filename, text="CL - trained controller", T=t_ext,
     obstacle_centers=loss_fn.obstacle_centers,
     obstacle_covs=loss_fn.obstacle_covs
 )
