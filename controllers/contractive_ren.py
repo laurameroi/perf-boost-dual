@@ -29,7 +29,7 @@ class ContractiveREN(nn.Module):
     def __init__(
         self, dim_in: int, dim_out: int, dim_internal: int,
         dim_nl: int, internal_state_init = None, initialization_std: float = 0.5,
-        posdef_tol: float = 0.001, contraction_rate_lb: float = 1.0
+        pos_def_tol: float = 0.001, contraction_rate_lb: float = 1.0
     ):
         """
         Args:
@@ -54,7 +54,7 @@ class ContractiveREN(nn.Module):
         self.contraction_rate_lb = contraction_rate_lb
 
         # auxiliary elements
-        self.epsilon = posdef_tol
+        self.epsilon = pos_def_tol
 
         # initialize internal state
         if internal_state_init is None:
@@ -77,7 +77,7 @@ class ContractiveREN(nn.Module):
         # v signal
         self.D12_shape = (self.dim_nl, self.dim_in)
 
-        # define trainble params
+        # define trainable params
         self.training_param_names = ['X', 'Y', 'B2', 'C2', 'D21', 'D22', 'D12']
         self._init_trainable_params(initialization_std)
 
