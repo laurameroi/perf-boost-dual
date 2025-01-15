@@ -9,10 +9,11 @@ sys.path.insert(1, BASE_DIR)
 from config import device
 from arg_parser import argument_parser, print_args
 from plants import RobotsSystem, RobotsDataset
-from utils.plot_functions import *
-from controllers import PerfBoostController
+from plot_functions import plot_trajectories, plot_traj_vs_time
+from controllers.PB_controller import PerfBoostController
 from loss_functions import RobotsLoss
-from utils.assistive_functions import WrapLogger
+from assistive_functions import WrapLogger
+
 
 
 # ----- SET UP LOGGER -----
