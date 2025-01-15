@@ -19,8 +19,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 
 # ----- Overwriting arguments -----  # TODO: remove and put it in argsparse
 args = argument_parser()
-args.random_seed = 8
-args.epochs = 2  # 5000
+args.epochs = 500  # 5000
 args.log_epoch = args.epochs//10 if args.epochs//10 > 0 else 1
 args.nn_type = "SSM"
 args.non_linearity = "tanh"  # "hamiltonian"  # "coupling_layers"
