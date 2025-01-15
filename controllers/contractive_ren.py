@@ -103,6 +103,7 @@ class ContractiveREN(nn.Module):
 
         # nn output
         self.E = 0.5 * (H11 + self.contraction_rate_lb * P + self.Y - self.Y.T)
+        self.E_inv = self.E.inverse()
 
         # v signal for strictly acyclic REN
         self.Lambda = 0.5 * torch.diag(H22)
@@ -133,13 +134,14 @@ class ContractiveREN(nn.Module):
             w = w + (self.eye_mask_w[i, :] * torch.tanh(v / self.Lambda[i])).reshape(batch_size, 1, self.dim_nl)
 
         # compute next state using Eq. 18
-        self.x = F.linear(
-            F.linear(self.x, self.F) + F.linear(w, self.B1) + F.linear(u_in, self.B2),
-            self.E.inverse())
+        self.x = F.linear(F.linear(self.x, self.F) + F.linear(w, self.B1) + F.linear(u_in, self.B2), self.E_inv)
 
         # compute output
         y_out = F.linear(self.x, self.C2) + F.linear(w, self.D21) + F.linear(u_in, self.D22)
         return y_out
+
+    def reset(self):
+        self.x = self.init_x  # reset the REN state to the initial value
 
     # init trainable params
     def _init_trainable_params(self, initialization_std):
