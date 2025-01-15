@@ -17,6 +17,7 @@ class RobotsSystem(torch.nn.Module):
         super().__init__()
 
         self.linear_plant = linear_plant
+        self.tanh_nonlinearity = False
 
         # initial state
         self.register_buffer('xbar', xbar.reshape(1, -1))  # shape = (1, state_dim)
@@ -91,8 +92,13 @@ class RobotsSystem(torch.nn.Module):
             # x is batched but A is not => can use F.linear to compute xA^T
             f = F.linear(x - self.xbar, self.A_lin) + F.linear(u, self.B) + self.xbar
         else:
-            # A depends on x, hence is batched. perform batched matrix multiplication
-            f = torch.bmm(x - self.xbar, self.A_nonlin(x).transpose(1,2)) + F.linear(u, self.B) + self.xbar
+            if not self.tanh_nonlinearity:
+                # A depends on x, hence is batched. perform batched matrix multiplication
+                f = torch.bmm(x - self.xbar, self.A_nonlin(x).transpose(1,2)) + F.linear(u, self.B) + self.xbar
+            else:
+                f = (F.linear(x - self.xbar, self.A_lin)
+                     + self.h * self.b2 / self.mass * self.mask.view(-1) * torch.tanh(x - self.xbar)
+                     + F.linear(u, self.B) + self.xbar)
         return f    # shape = (batch_size, 1, state_dim)
 
     def forward(self, t, x, u, w):
