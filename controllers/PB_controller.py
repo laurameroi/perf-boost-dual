@@ -17,16 +17,22 @@ class PerfBoostController(nn.Module):
         This controller has a memory for the last input ("self.last_input") and
         the last output ("self.last_output").
     """
-    def __init__(
-        self, noiseless_forward, input_init: torch.Tensor, output_init: torch.Tensor,
-        # acyclic REN properties
-        dim_internal: int, dim_nl: int,
-        initialization_std: float = 0.5,
-        posdef_tol: float = 0.001, contraction_rate_lb: float = 1.0,
-        ren_internal_state_init=None,
-        # misc
-        output_amplification: float=20,
-    ):
+    def __init__(self,
+                 noiseless_forward,
+                 input_init: torch.Tensor,
+                 output_init: torch.Tensor,
+                 nn_type: str = "REN",
+                 non_linearity: str = None,
+                 # acyclic REN properties
+                 dim_internal: int = 8,
+                 dim_nl: int = 8,
+                 initialization_std: float = 0.5,
+                 pos_def_tol: float = 0.001,
+                 contraction_rate_lb: float = 1.0,
+                 ren_internal_state_init=None,
+                 # misc
+                 output_amplification: float=20,
+                 ):
         """
          Args:
             noiseless_forward: system dynamics without process noise. can be TV.
@@ -53,12 +59,14 @@ class PerfBoostController(nn.Module):
         self.dim_in = self.input_init.shape[-1]
         self.dim_out = self.output_init.shape[-1]
 
-        # define the REN
-        self.c_ren = ContractiveREN(
+        # set type of nn for emme
+        self.nn_type = nn_type
+        # define Emme as REN
+        self.emme = ContractiveREN(
             dim_in=self.dim_in, dim_out=self.dim_out, dim_internal=dim_internal,
             dim_nl=dim_nl, initialization_std=initialization_std,
             internal_state_init=ren_internal_state_init,
-            pos_def_tol=posdef_tol, contraction_rate_lb=contraction_rate_lb
+            pos_def_tol=pos_def_tol, contraction_rate_lb=contraction_rate_lb
         ).to(device)
 
         # define the system dynamics without process noise
@@ -73,7 +81,7 @@ class PerfBoostController(nn.Module):
         self.t = 0  # time
         self.last_input = self.input_init.detach().clone()
         self.last_output = self.output_init.detach().clone()
-        self.c_ren.x = self.c_ren.init_x    # reset the REN state to the initial value
+        self.emme.reset()  # reset emme states to the initial value
 
     def forward(self, input_t: torch.Tensor):
         """
@@ -98,7 +106,7 @@ class PerfBoostController(nn.Module):
         w_ = input_t - u_noiseless # shape = (self.batch_size, 1, self.dim_in)
 
         # apply REN
-        output = self.c_ren.forward(w_)
+        output = self.emme.forward(w_)
         output = output*self.output_amplification   # shape = (self.batch_size, 1, self.dim_out)
 
         # update internal states
@@ -108,20 +116,20 @@ class PerfBoostController(nn.Module):
 
     # setters and getters
     def get_parameter_shapes(self):
-        return self.c_ren.get_parameter_shapes()
+        return self.emme.get_parameter_shapes()
 
     def get_named_parameters(self):
-        return self.c_ren.get_named_parameters()
+        return self.emme.get_named_parameters()
 
     def get_parameters_as_vector(self):
         # TODO: implement without numpy
-        return np.concatenate([p.detach().clone().cpu().numpy().flatten() for p in self.c_ren.parameters()])
+        return np.concatenate([p.detach().clone().cpu().numpy().flatten() for p in self.emme.parameters()])
 
     def set_parameter(self, name, value):
-        current_val = getattr(self.c_ren, name)
+        current_val = getattr(self.emme, name)
         value = torch.nn.Parameter(value.reshape(current_val.shape))
-        setattr(self.c_ren, name, value)
-        self.c_ren._update_model_param()    # update dependent params
+        setattr(self.emme, name, value)
+        self.emme._update_model_param()    # update dependent params
 
     def set_parameters(self, param_dict):
         for name, value in param_dict.items():

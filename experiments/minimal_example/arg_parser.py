@@ -21,8 +21,16 @@ def argument_parser():
     parser.add_argument('--linearize-plant', type=bool, default=False, help='Linearize plant or not. Default is False.')
 
     # controller
-    parser.add_argument('--cont-init-std', type=float, default=0.1, help='Initialization std for controller params. Default is 0.1.')
-    parser.add_argument('--dim-internal', type=int, default=8, help='Dimension of the internal state of the controller. Adjusts the size of the linear part of REN. Default is 8.')
+    parser.add_argument('--nn-type', type=str, default='SSM',
+                        help='Type of the NN for operator Emme in controller. Options: REN or SSM. Default is REN')
+    parser.add_argument('--non-linearity', type=str,
+                        help='Type of non_linearity in SSMs. Options: MLP, coupling_layers, hamiltonian, tanh. '
+                             'Default coupling_layers.')
+    parser.add_argument('--cont-init-std', type=float, default=0.1,
+                        help='Initialization std for controller params. Default is 0.1.')
+    parser.add_argument('--dim-internal', type=int, default=8,
+                        help='Dimension of the internal state of the controller. '
+                             'Adjusts the size of the linear part of REN. Default is 8.')
     parser.add_argument('--dim-nl', type=int, default=8, help='size of the non-linear part of REN. Default is 8.')
 
     # loss
@@ -48,6 +56,10 @@ def argument_parser():
     # parser.add_argument('--device', type=str, default="cuda:0" if torch.cuda.is_available() else "cpu", help='Device to run the computations on, "cpu" or "cuda:0". Default is "cuda:0" if available, otherwise "cpu".')
 
     args = parser.parse_args()
+
+    # set default non-linearity for SSMs
+    if args.nn_type == "SSM":
+        args.non_linearity = 'coupling_layers'
 
     # set default values that depend on other args
     if args.batch_size == -1:
@@ -84,14 +96,18 @@ def print_args(args):
 
     msg += '\n[INFO] Plant: spring constant: %.2f' % args.spring_const + ' -- use linearized plant: ' + str(args.linearize_plant)
 
-    msg += '\n[INFO] Controller: dimension of the internal state: %i' % args.dim_internal
-    msg += ' -- dim_nl: %i' % args.dim_nl + ' -- cont_init_std: %.2f'% args.cont_init_std
+    msg += '\n[INFO] Controller using %ss: dimension of the internal state: %i' % (args.nn_type, args.dim_internal)
+    msg += ' -- dim_nl: %i' % args.dim_nl + ' -- cont_init_std: %.2f' % args.cont_init_std
+    if args.nn_type == "SSM":
+        msg += ' -- non_linearity: %s' % args.non_linearity
 
     msg += '\n[INFO] Loss:  alpha_u: %.6f' % args.alpha_u
     msg += ' -- alpha_col: %.f' % args.alpha_col if args.col_av else ' -- no collision avoidance'
     msg += ' -- alpha_obst: %.1f' % args.alpha_obst if args.obst_av else ' -- no obstacle avoidance'
 
     msg += '\n[INFO] Optimizer: lr: %.2e' % args.lr
-    msg += ' -- batch_size: %i' % args.batch_size + ', -- return best model for validation data among logged epochs:' + str(args.return_best)
+    msg += ' -- epochs: %i,' % args.epochs
+    msg += ' -- batch_size: %i,' % args.batch_size
+    msg += ' -- return best model for validation data among logged epochs: ' + str(args.return_best)
 
     return msg
