@@ -58,7 +58,7 @@ class PerfBoostController(nn.Module):
             dim_in=self.dim_in, dim_out=self.dim_out, dim_internal=dim_internal,
             dim_nl=dim_nl, initialization_std=initialization_std,
             internal_state_init=ren_internal_state_init,
-            posdef_tol=posdef_tol, contraction_rate_lb=contraction_rate_lb
+            pos_def_tol=posdef_tol, contraction_rate_lb=contraction_rate_lb
         ).to(device)
 
         # define the system dynamics without process noise
