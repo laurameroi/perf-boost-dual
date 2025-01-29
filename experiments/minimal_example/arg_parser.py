@@ -7,8 +7,8 @@ def argument_parser():
 
     # experiment
     parser.add_argument('--random-seed', type=int, default=5, help='Random seed. Default is 5.')
-    parser.add_argument('--col-av', type=bool, default=True, help='Avoid collisions. Default is True.')
-    parser.add_argument('--obst-av', type=bool, default=True, help='Avoid obstacles. Default is True.')
+    parser.add_argument('--col-av', type=str2bool, default=True, help='Avoid collisions. Default is True.')
+    parser.add_argument('--obst-av', type=str2bool, default=True, help='Avoid obstacles. Default is True.')
 
     # dataset
     parser.add_argument('--horizon', type=int, default=100, help='Time horizon for the computation. Default is 100.')
@@ -18,7 +18,7 @@ def argument_parser():
 
     # plant
     parser.add_argument('--spring-const', type=float, default=1.0 , help='Spring constant. Default is 1.0.')
-    parser.add_argument('--linearize-plant', type=bool, default=False, help='Linearize plant or not. Default is False.')
+    parser.add_argument('--linearize-plant', type=str2bool, default=False, help='Linearize plant or not. Default is False.')
 
     # controller
     parser.add_argument('--nn-type', type=str, default='SSM',
@@ -44,8 +44,13 @@ def argument_parser():
     parser.add_argument('--epochs', type=int, default=-1, help='Total number of epochs for training. Default is 5000 if collision avoidance, else 100.')
     parser.add_argument('--lr', type=float, default=-1, help='Learning rate. Default is 2e-3 if collision avoidance, else 5e-3.')
     parser.add_argument('--log-epoch', type=int, default=-1, help='Frequency of logging in epochs. Default is 0.1 * epochs.')
-    parser.add_argument('--return-best', type=bool, default=True, help='Return the best model on the validation data among all logged iterations. The train data can be used instead of validation data. The Default is True.')
-
+    parser.add_argument('--return-best', type=str2bool, default=True, help='Return the best model on the validation data among all logged iterations. The train data can be used instead of validation data. The Default is True.')
+    # optimizer - early stopping
+    parser.add_argument('--early-stopping', type=str2bool, default=True, help='Stop SGD if validation loss does not significantly decrease.')
+    parser.add_argument('--validation-frac', type=float, default=0.25, help='Fraction of data used for validation. Default is 0.25.')
+    parser.add_argument('--n-logs-no-change', type=int, default=5, help='Early stopping if the validation loss does not improve by at least tol percentage during the last n_logs_no_change logged epochs. Default is 5.')
+    parser.add_argument('--tol-percentage', type=float, default=0.05, help='Early stopping if the validation loss does not improve by at least tol percentage during the last n_logs_no_change logged epochs. Default is 0.05%.')
+    
     # TODO: add the following
     # parser.add_argument('--patience-epoch', type=int, default=None, help='Patience epochs for no progress. Default is None which sets it to 0.2 * total_epochs.')
     # parser.add_argument('--lr-start-factor', type=float, default=1.0, help='Start factor of the linear learning rate scheduler. Default is 1.0.')
@@ -87,6 +92,13 @@ def argument_parser():
     if args.horizon > 100:
         print(f'Long horizons may be unnecessary and pose significant computation')
 
+    if args.return_best:
+        assert args.validation_frac > 0, 'validation fraction must be positive for return best.'
+        assert args.validation_frac < 1, 'validation fraction must be less than 1 for return best.'
+    if args.early_stopping:
+        assert args.validation_frac > 0, 'validation fraction must be positive for early stopping.'
+        assert args.validation_frac < 1, 'validation fraction must be less than 1 for early stopping.'
+
     return args
 
 
@@ -109,5 +121,20 @@ def print_args(args):
     msg += ' -- epochs: %i,' % args.epochs
     msg += ' -- batch_size: %i,' % args.batch_size
     msg += ' -- return best model for validation data among logged epochs: ' + str(args.return_best)
+    if args.early_stopping:
+        msg += '\n Early stopping enabled with validation fraction: %.2f' % args.validation_frac
+        msg += ' -- n_logs_no_change: %i' % args.n_logs_no_change + ' -- tol percentage: %.2f' % args.tol_percentage
+    else:
+        msg += '\n Early stopping disabled'
 
     return msg
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 'True', 't', 'T', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'False', 'f', 'F', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')

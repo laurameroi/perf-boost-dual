@@ -43,10 +43,17 @@ torch.manual_seed(args.random_seed)
 # ------------ 1. Dataset ------------
 dataset = RobotsDataset(random_seed=args.random_seed, horizon=args.horizon, std_ini=args.std_init_plant, n_agents=2)
 # divide to train and test
-train_data, test_data = dataset.get_data(num_train_samples=args.num_rollouts, num_test_samples=500)
-train_data, test_data = train_data.to(device), test_data.to(device)
-valid_data = train_data      # use the entire train data for validation
-assert not (valid_data is None and args.return_best)
+train_data_full, test_data = dataset.get_data(num_train_samples=args.num_rollouts, num_test_samples=500)
+train_data_full, test_data = train_data_full.to(device), test_data.to(device)
+# validation data
+if args.early_stopping or args.return_best:
+    valid_inds = torch.randperm(train_data_full.shape[0])[:int(args.validation_frac*train_data_full.shape[0])]
+    train_inds = [ind for ind in range(train_data_full.shape[0]) if ind not in valid_inds]
+    valid_data = train_data_full[valid_inds, :, :]
+    train_data = train_data_full[train_inds, :, :]
+else:
+    valid_data = None
+    train_data = train_data_full
 # data for plots
 t_ext = args.horizon * 4
 plot_data = torch.zeros(1, t_ext, train_data.shape[-1], device=device)
@@ -102,7 +109,8 @@ loss_fn = RobotsLoss(
 ctl.fit(
     sys=sys, train_dataloader=train_dataloader, valid_data=valid_data, 
     lr=args.lr, loss_fn=loss_fn, epochs=args.epochs, log_epoch=args.log_epoch, 
-    return_best=args.return_best, logger=logger
+    return_best=args.return_best, logger=logger, early_stopping=args.early_stopping, 
+    n_logs_no_change=args.n_logs_no_change, tol_percentage=args.tol_percentage
 )
 
 # ------ 6. Save and evaluate the trained model ------

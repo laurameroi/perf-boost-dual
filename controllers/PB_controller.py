@@ -191,7 +191,10 @@ class PerfBoostController(nn.Module):
     def __call__(self, *args, **kwargs):  # CLARA: Why do we need this function? Isn't it implemented in nn.Module?
         return self.forward(*args, **kwargs)
 
-    def fit(self, sys, train_dataloader, valid_data, lr, loss_fn, epochs, log_epoch, return_best, logger):
+    def fit(
+        self, sys, train_dataloader, valid_data, lr, loss_fn, epochs, 
+        log_epoch, logger, return_best, early_stopping, n_logs_no_change=None, tol_percentage=None
+    ):
         logger.info('\n------------ Begin training ------------')
     
         # Set up optimizer
@@ -201,27 +204,34 @@ class PerfBoostController(nn.Module):
         if return_best:
             best_valid_loss = float('inf')
             best_params = self.state_dict()
-        
+        # Queue to store the last n_logs_no_change validation improvements
+        if early_stopping:
+            assert not (n_logs_no_change is None or tol_percentage is None), 'Early stopping requires n_logs_no_change and tol_percentage'  
+            valid_imp_queue = [100]*n_logs_no_change   # Set to 100 to avoid stopping at the beginning
+
         # Record start time
         start_time = time.time()
 
+        fitted = False
         try:
             # Train the controller
             for epoch in range(epochs + 1):
+                train_loss_batch = 0    # Accumulate training loss over the batch
                 for train_data_batch in train_dataloader:
                     optimizer.zero_grad()
                     # Simulate over horizon steps
                     x_log, _, u_log = sys.rollout(controller=self, data=train_data_batch, train=True)
                     # Calculate loss of all rollouts in the batch
                     loss = loss_fn(x_log, u_log)
+                    train_loss_batch += loss.item()
                     # Backpropagation and optimization step
                     loss.backward()
                     optimizer.step()
 
                 # Log training information
                 if epoch % log_epoch == 0:
-                    msg = f'Epoch: {epoch} --- train loss: {loss:.2f}'
-                    if return_best:
+                    msg = f'Epoch: {epoch} --- train loss: {loss.item():.2f}'
+                    if return_best or early_stopping:
                         # Rollout the current controller on the validation data
                         with torch.no_grad():
                             x_log_valid, _, u_log_valid = sys.rollout(controller=self, data=valid_data, train=False)
@@ -229,13 +239,26 @@ class PerfBoostController(nn.Module):
                             loss_valid = loss_fn(x_log_valid, u_log_valid)
                         msg += f' ---||--- validation loss: {loss_valid.item():.2f}'
                         # Compare with the best validation loss
-                        if loss_valid.item() < best_valid_loss:
+                        imp = 100 * (best_valid_loss-loss_valid.item())/best_valid_loss # Valid loss improvement
+                        if imp>0:
                             best_valid_loss = loss_valid.item()
-                            best_params = copy.deepcopy(self.state_dict())
-                            msg += ' (best so far)'
+                            if return_best:
+                                best_params = copy.deepcopy(self.state_dict())  # Record state dict if best on valid
+                                msg += ' (best so far)'
+                        # Early stopping
+                        if early_stopping:
+                            # Add the current improvement to the queue
+                            valid_imp_queue.pop(0)
+                            valid_imp_queue.append(imp)
+                            # Check if there is no improvement
+                            if all([valid_imp_queue[i] <tol_percentage for i in range(n_logs_no_change)]):
+                                msg += ' ---||--- early stopping'
+                                fitted = True
                     elapsed_time = time.time() - start_time
                     msg += f' ---||--- elapsed time: {elapsed_time:.0f} s'
                     logger.info(msg)
+                    if fitted:
+                        break
         except Exception as e:
             logger.error(f'An error occurred during training: {e}')
             raise e

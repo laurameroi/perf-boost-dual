@@ -42,8 +42,16 @@ dataset = LTIDataset(
     state_dim=args.state_dim, disturbance=disturbance
 )
 # divide to train and test
-train_data, test_data = dataset.get_data(num_train_samples=args.num_rollouts, num_test_samples=500)
-train_data, test_data = train_data.to(device), test_data.to(device)
-
+train_data_full, test_data = dataset.get_data(num_train_samples=args.num_rollouts, num_test_samples=500)
+train_data_full, test_data = train_data_full.to(device), test_data.to(device)
+# validation data
+if args.early_stopping or args.return_best:
+    valid_inds = torch.randperm(train_data_full.shape[0])[:int(args.validation_frac*train_data_full.shape[0])]
+    train_inds = [ind for ind in range(train_data_full.shape[0]) if ind not in valid_inds]
+    valid_data = train_data_full[valid_inds, :, :]
+    train_data = train_data_full[train_inds, :, :]
+else:
+    valid_data = None
+    train_data = train_data_full
 # batch the data
 train_dataloader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
