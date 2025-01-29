@@ -163,6 +163,10 @@ class PerfBoostController(nn.Module):
             self.set_parameter(name, value)
 
     def set_parameters_as_vector(self, value):
+        # flatten vec if not batched
+        if value.nelement()==self.num_params:
+            value = value.flatten()
+
         if self.nn_type == 'SSM':
             print("This function might not work for SSMs.....")
         idx = 0
@@ -173,13 +177,15 @@ class PerfBoostController(nn.Module):
             elif len(shape) == 2:
                 dim = shape[0] * shape[1]
             else:
-                raise NotImplementedError
+                dim = shape[-1]*shape[-2]
             idx_next = idx + dim
             # select index
             if len(value.shape) == 1:
                 value_tmp = value[idx:idx_next]
             elif len(value.shape) == 2:
                 value_tmp = value[:, idx:idx_next]
+            elif value.ndim == 3:
+                value_tmp = value[:, :, idx:idx_next]
             else:
                 raise AssertionError
             # set
