@@ -1,4 +1,4 @@
-import torch
+import torch, time, copy
 import torch.nn as nn
 import numpy as np
 
@@ -190,3 +190,56 @@ class PerfBoostController(nn.Module):
 
     def __call__(self, *args, **kwargs):  # CLARA: Why do we need this function? Isn't it implemented in nn.Module?
         return self.forward(*args, **kwargs)
+
+    def fit(self, sys, train_dataloader, valid_data, lr, loss_fn, epochs, log_epoch, return_best, logger):
+        logger.info('\n------------ Begin training ------------')
+    
+        # Set up optimizer
+        optimizer = torch.optim.Adam(self.parameters(), lr=lr)
+
+        # Initialize best valid loss and best parameters
+        if return_best:
+            best_valid_loss = float('inf')
+            best_params = self.state_dict()
+        
+        # Record start time
+        start_time = time.time()
+
+        try:
+            # Train the controller
+            for epoch in range(epochs + 1):
+                for train_data_batch in train_dataloader:
+                    optimizer.zero_grad()
+                    # Simulate over horizon steps
+                    x_log, _, u_log = sys.rollout(controller=self, data=train_data_batch, train=True)
+                    # Calculate loss of all rollouts in the batch
+                    loss = loss_fn(x_log, u_log)
+                    # Backpropagation and optimization step
+                    loss.backward()
+                    optimizer.step()
+
+                # Log training information
+                if epoch % log_epoch == 0:
+                    msg = f'Epoch: {epoch} --- train loss: {loss:.2f}'
+                    if return_best:
+                        # Rollout the current controller on the validation data
+                        with torch.no_grad():
+                            x_log_valid, _, u_log_valid = sys.rollout(controller=self, data=valid_data, train=False)
+                            # Calculate validation loss
+                            loss_valid = loss_fn(x_log_valid, u_log_valid)
+                        msg += f' ---||--- validation loss: {loss_valid.item():.2f}'
+                        # Compare with the best validation loss
+                        if loss_valid.item() < best_valid_loss:
+                            best_valid_loss = loss_valid.item()
+                            best_params = copy.deepcopy(self.state_dict())
+                            msg += ' (best so far)'
+                    elapsed_time = time.time() - start_time
+                    msg += f' ---||--- elapsed time: {elapsed_time:.0f} s'
+                    logger.info(msg)
+        except Exception as e:
+            logger.error(f'An error occurred during training: {e}')
+            raise e
+
+        # Set to best seen parameters during training
+        if return_best:
+            self.load_state_dict(best_params)

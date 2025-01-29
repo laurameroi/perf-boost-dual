@@ -45,6 +45,8 @@ dataset = RobotsDataset(random_seed=args.random_seed, horizon=args.horizon, std_
 # divide to train and test
 train_data, test_data = dataset.get_data(num_train_samples=args.num_rollouts, num_test_samples=500)
 train_data, test_data = train_data.to(device), test_data.to(device)
+valid_data = train_data      # use the entire train data for validation
+assert not (valid_data is None and args.return_best)
 # data for plots
 t_ext = args.horizon * 4
 plot_data = torch.zeros(1, t_ext, train_data.shape[-1], device=device)
@@ -96,66 +98,14 @@ loss_fn = RobotsLoss(
     n_agents=sys.n_agents if args.col_av else None,
 )
 
-# ------------ 5. Optimizer ------------
-valid_data = train_data      # use the entire train data for validation
-assert not (valid_data is None and args.return_best)
-optimizer = torch.optim.Adam(ctl.parameters(), lr=args.lr)
+# ------------ 5. Training ------------
+ctl.fit(
+    sys=sys, train_dataloader=train_dataloader, valid_data=valid_data, 
+    lr=args.lr, loss_fn=loss_fn, epochs=args.epochs, log_epoch=args.log_epoch, 
+    return_best=args.return_best, logger=logger
+)
 
-# ------------ 6. Training ------------
-logger.info('\n------------ Begin training ------------')
-best_valid_loss = 1e6
-best_params = ctl.state_dict()  # ctl.get_parameters_as_vector()
-loss = 1e6
-t = time.time()
-for epoch in range(1+args.epochs):
-    # iterate over all data batches
-    for train_data_batch in train_dataloader:
-        optimizer.zero_grad()
-        # simulate over horizon steps
-        x_log, _, u_log = sys.rollout(
-            controller=ctl, data=train_data_batch, train=True,
-        )
-        # loss of this rollout
-        loss = loss_fn.forward(x_log, u_log)
-        # take a step
-        loss.backward()
-        optimizer.step()
-
-    # print info
-    if epoch % args.log_epoch == 0:
-        msg = 'Epoch: %i --- train loss: %.2f' % (epoch, loss)
-
-        if args.return_best:
-            # rollout the current controller on the valid data
-            with torch.no_grad():
-                x_log_valid, _, u_log_valid = sys.rollout(
-                    controller=ctl, data=valid_data, train=False,
-                )
-                # loss of the valid data
-                loss_valid = loss_fn.forward(x_log_valid, u_log_valid)
-            msg += ' ---||--- validation loss: %.2f' % (loss_valid.item())
-            # compare with the best valid loss
-            if loss_valid.item() < best_valid_loss:
-                best_valid_loss = loss_valid.item()
-                best_params = copy.deepcopy(ctl.state_dict())
-                # ctl.get_parameters_as_vector()  # record state dict if best on valid
-                msg += ' (best so far)'
-        duration = time.time() - t
-        msg += ' ---||--- time: %.0f s' % duration
-        logger.info(msg)
-        # plot trajectory
-        plot_trajectories(
-            x_log_valid[0, :, :],  # remove extra dim due to batching
-            dataset.xbar, sys.n_agents, filename=filename, text="CL - at epoch %i" % epoch, T=t_ext
-        )
-        t = time.time()
-
-# set to best seen during training
-if args.return_best:
-    ctl.load_state_dict(best_params)
-    # ctl.set_parameters_as_vector(best_params)
-
-# ------ 7. Save and evaluate the trained model ------
+# ------ 6. Save and evaluate the trained model ------
 # save
 res_dict = ctl.emme.state_dict()
 # TODO: append args
