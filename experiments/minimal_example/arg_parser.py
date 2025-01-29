@@ -12,9 +12,9 @@ def argument_parser():
 
     # dataset
     parser.add_argument('--horizon', type=int, default=100, help='Time horizon for the computation. Default is 100.')
-    parser.add_argument('--n-agents', type=int, default=2, help='Number of agents. Default is 2.')
+    parser.add_argument('--n-agents', type=int, default=1, help='Number of agents. Default is 1.')
     parser.add_argument('--num-rollouts', type=int, default=30, help='Number of rollouts in the training data. Default is 30.')
-    parser.add_argument('--std-init-plant', type=float, default=0.2, help='std of the plant initial conditions. Default is 0.2.')
+    parser.add_argument('--std-noise', type=float, default=0.2, help='std of the noise (plant initial conditions). Default is 0.2.')
 
     # plant
     parser.add_argument('--spring-const', type=float, default=1.0 , help='Spring constant. Default is 1.0.')
@@ -104,7 +104,7 @@ def argument_parser():
 
 def print_args(args):
     msg = '\n[INFO] Dataset: n_agents: %i' % args.n_agents + ' -- num_rollouts: %i' % args.num_rollouts
-    msg += ' -- std_ini: %.2f' % args.std_init_plant + ' -- time horizon: %i' % args.horizon
+    msg += ' -- std_noise: %.2f' % args.std_noise + ' -- time horizon: %i' % args.horizon
 
     msg += '\n[INFO] Plant: spring constant: %.2f' % args.spring_const + ' -- use linearized plant: ' + str(args.linearize_plant)
 
