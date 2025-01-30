@@ -7,18 +7,18 @@ def argument_parser():
 
     # experiment
     parser.add_argument('--random-seed', type=int, default=5, help='Random seed. Default is 5.')
-    parser.add_argument('--col-av', type=str2bool, default=True, help='Avoid collisions. Default is True.')
-    parser.add_argument('--obst-av', type=str2bool, default=True, help='Avoid obstacles. Default is True.')
+    parser.add_argument('--col-av', type=str2bool, default=False, help='Avoid collisions. Default is True.')
+    parser.add_argument('--obst-av', type=str2bool, default=False, help='Avoid obstacles. Default is True.')
 
     # dataset
-    parser.add_argument('--horizon', type=int, default=100, help='Time horizon for the computation. Default is 100.')
+    parser.add_argument('--horizon', type=int, default=500, help='Time horizon for the computation. Default is 100.')
     parser.add_argument('--n-agents', type=int, default=1, help='Number of agents. Default is 1.')
     parser.add_argument('--num-rollouts', type=int, default=30, help='Number of rollouts in the training data. Default is 30.')
     parser.add_argument('--std-noise', type=float, default=0.2, help='std of the noise (plant initial conditions). Default is 0.2.')
 
     # plant
     parser.add_argument('--spring-const', type=float, default=1.0 , help='Spring constant. Default is 1.0.')
-    parser.add_argument('--linearize-plant', type=str2bool, default=False, help='Linearize plant or not. Default is False.')
+    parser.add_argument('--linearize-plant', type=str2bool, default=True, help='Linearize plant or not. Default is False.')
 
     # controller
     parser.add_argument('--nn-type', type=str, default='SSM',
@@ -41,8 +41,8 @@ def argument_parser():
 
     # optimizer
     parser.add_argument('--batch-size', type=int, default=5, help='Number of forward trajectories of the closed-loop system at each step. Default is 5.')
-    parser.add_argument('--epochs', type=int, default=-1, help='Total number of epochs for training. Default is 5000 if collision avoidance, else 100.')
-    parser.add_argument('--lr', type=float, default=-1, help='Learning rate. Default is 2e-3 if collision avoidance, else 5e-3.')
+    parser.add_argument('--epochs', type=int, default=500, help='Total number of epochs for training. Default is 5000 if collision avoidance, else 100.')
+    parser.add_argument('--lr', type=float, default=1e-2, help='Learning rate. Default is 2e-3 if collision avoidance, else 5e-3.')
     parser.add_argument('--log-epoch', type=int, default=-1, help='Frequency of logging in epochs. Default is 0.1 * epochs.')
     parser.add_argument('--return-best', type=str2bool, default=True, help='Return the best model on the validation data among all logged iterations. The train data can be used instead of validation data. The Default is True.')
     # optimizer - early stopping

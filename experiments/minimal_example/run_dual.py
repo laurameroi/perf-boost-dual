@@ -71,17 +71,20 @@ G0 = TrainableRobotsSystem(x_target=dataset.x_target,
                    linear_plant=args.linearize_plant,
                    init_k=init_k, init_b=init_b, init_mass=init_mass, init_b2=init_b2
                    ).to(device)
-
+torch.save(G0.state_dict(), "G0_initial.pth")
 optimizer = torch.optim.Adam(G0.parameters(), lr=args.lr)
 # compute loss
 loss_fn = torch.nn.MSELoss()
 
 for epoch in range(args.epochs):
     optimizer.zero_grad()
-    x_log = G0.openloop_rollout(u=openloop_data_in, noise=dataset.noise, train=True)
+    x_log = G0.openloop_rollout(u=openloop_data_in, noise=None, train=True)
     loss = loss_fn(x_log, openloop_data_out)
     loss.backward()
     optimizer.step()
     if epoch%args.log_epoch == 0:
         print('Epoch: ', epoch, 'Loss: ', loss.item())
         print([p.item() for p in G0.parameters()])
+
+# Save the trained model's parameters
+torch.save(G0.state_dict(), "G0_trained.pth")
