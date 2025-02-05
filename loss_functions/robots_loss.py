@@ -8,7 +8,7 @@ class RobotsLoss(LQLossFH):
         self, xbar, Q, alpha_u=1,
         alpha_col=None, alpha_obst=None,
         loss_bound=None, sat_bound=None,
-        n_agents=2, min_dist=0.5,
+        n_agents=1, min_dist=0.5,
         obstacle_centers=None, obstacle_covs=None
     ):
         super().__init__(Q=Q, R=alpha_u, loss_bound=loss_bound, sat_bound=sat_bound, xbar=xbar)
@@ -174,6 +174,8 @@ class RobotsLoss(LQLossFH):
         distance_sq = deltaqx ** 2 + deltaqy ** 2             # shape = (S, T, n_agents, n_agents)
         return distance_sq
 
+    def __call__(self, x, u):
+        return self.forward(x, u)  # Ensures the object is callable
 
 def normpdf(q, mu, cov):  #TODO
     """
@@ -201,3 +203,4 @@ def normpdf(q, mu, cov):  #TODO
         else:
             out += nom/den
     return out
+

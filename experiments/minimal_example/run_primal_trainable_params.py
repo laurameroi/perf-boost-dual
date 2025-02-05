@@ -54,9 +54,12 @@ else:
     train_data = train_data_full
 # data for plots
 t_ext = args.horizon * 4
+'''
 plot_data = torch.zeros(1, t_ext, train_data.shape[-1], device=device)
 #plot_data[:, 0, :] = (dataset.x_init.detach() - dataset.x_target)
 plot_data = plot_data.to(device)
+'''
+plot_data = train_data_full
 # batch the data
 train_dataloader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
 
@@ -99,7 +102,7 @@ ctl = PerfBoostController(noiseless_forward=G0.noiseless_forward,
 
 # plot closed-loop trajectories before training the controller
 logger.info('Plotting closed-loop trajectories before training the controller...')
-x_log, _, u_log = sys.rollout(ctl, plot_data)
+x_log, _, u_log = sys.rollout(ctl, train_data_full)
 filename = os.path.join(save_folder, 'CL_init.pdf')
 plot_trajectories(
     x_log[0, :, :],  # remove extra dim due to batching

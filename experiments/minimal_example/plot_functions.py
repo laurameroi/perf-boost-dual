@@ -2,6 +2,9 @@ import torch, os
 from scipy.stats import multivariate_normal # TODO: use something compatible with tensors
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
+#matplotlib.use('TkAgg')  # or 'Qt5Agg', 'MacOSX', depending on your OS
+
 from datetime import datetime
 
 

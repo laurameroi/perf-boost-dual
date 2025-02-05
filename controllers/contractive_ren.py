@@ -29,7 +29,7 @@ class ContractiveREN(nn.Module):
     def __init__(
         self, dim_in: int, dim_out: int, dim_internal: int,
         dim_nl: int, internal_state_init = None, initialization_std: float = 0.5,
-        pos_def_tol: float = 0.001, contraction_rate_lb: float = 1.0
+        pos_def_tol: float = 0.001, contraction_rate_lb: float = 1.0, y_init = None, linear_output=True, device="cuda:0" if torch.cuda.is_available() else "cpu"
     ):
         """
         Args:
@@ -49,20 +49,15 @@ class ContractiveREN(nn.Module):
         self.dim_out = dim_out
         self.dim_internal = dim_internal
         self.dim_nl = dim_nl
+        self.device = device
 
         # set functionalities
         self.contraction_rate_lb = contraction_rate_lb
+        self.linear_output = linear_output
+        self.initialization_std = initialization_std
 
         # auxiliary elements
         self.epsilon = pos_def_tol
-
-        # initialize internal state
-        if internal_state_init is None:
-            self.x = torch.zeros(1, 1, self.dim_internal)
-        else:
-            assert isinstance(internal_state_init, torch.Tensor)
-            self.x = internal_state_init.reshape(1, 1, self.dim_internal)
-        self.register_buffer('init_x', self.x.detach().clone())
 
         # define matrices shapes
         # auxiliary matrices
@@ -79,11 +74,32 @@ class ContractiveREN(nn.Module):
 
         # define trainable params
         self.training_param_names = ['X', 'Y', 'B2', 'C2', 'D21', 'D22', 'D12']
+
+        if self.linear_output:
+            # set D21 to zero
+            self.training_param_names.remove('D21') # not trainable anymore
+            self.D21 = torch.zeros(*self.D21_shape, device=self.device) * self.initialization_std
+            # set D22 to zero
+            self.D22 = torch.zeros(*self.D22_shape, device=self.device) * self.initialization_std
+            self.training_param_names.remove('D22') # not trainable anymore
+
         self._init_trainable_params(initialization_std)
 
         # mask
         self.register_buffer('eye_mask_H', torch.eye(2 * self.dim_internal + self.dim_nl))
         self.register_buffer('eye_mask_w', torch.eye(self.dim_nl))
+
+        # initialize internal state
+        if internal_state_init is None:
+            if y_init is None:
+                self.x = torch.zeros(1, 1, self.dim_internal)
+            else:
+                y_init = y_init.reshape(1, -1)
+                self.x = torch.linalg.lstsq(self.C2, y_init.squeeze(1).T)[0].T.unsqueeze(1)
+        else:
+            assert isinstance(internal_state_init, torch.Tensor)
+            self.x = internal_state_init.reshape(1, 1, self.dim_internal)
+        self.register_buffer('init_x', self.x.detach().clone())
 
     def _update_model_param(self):
         """
@@ -139,6 +155,7 @@ class ContractiveREN(nn.Module):
         # compute output
         y_out = F.linear(self.x, self.C2) + F.linear(w, self.D21) + F.linear(u_in, self.D22)
         return y_out
+
 
     def reset(self):
         self.x = self.init_x  # reset the REN state to the initial value

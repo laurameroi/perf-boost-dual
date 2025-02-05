@@ -19,7 +19,7 @@ class PerfBoostController(nn.Module):
     """
 
     def __init__(self,
-                 noiseless_forward,
+                 internal_model,
                  input_init: torch.Tensor,
                  output_init: torch.Tensor,
                  nn_type: str = "REN",
@@ -85,7 +85,7 @@ class PerfBoostController(nn.Module):
             raise ValueError("Model for emme not implemented")
 
         # define the system dynamics without process noise
-        self.noiseless_forward = noiseless_forward
+        self.internal_model = internal_model
 
         # Internal variables
         self.t = None
@@ -116,15 +116,12 @@ class PerfBoostController(nn.Module):
         """
 
         # apply noiseless forward to get noise less input (noise less state of the plant)
-        u_noiseless = self.noiseless_forward(
-            t=self.t,
-            x=self.last_input,  # last input to the controller is the last state of the plant
+        u_noiseless = self.internal_model.forward(
             u=self.last_output  # last output of the controller is the last input to the plant
         )  # shape = (self.batch_size, 1, self.dim_in)
 
         # reconstruct the noise
         w_ = input_t - u_noiseless  # shape = (self.batch_size, 1, self.dim_in)
-
         # apply REN or SSM
         output = self.emme.forward(w_)
         output = output * self.output_amplification  # shape = (self.batch_size, 1, self.dim_out)

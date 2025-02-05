@@ -1,6 +1,6 @@
 import torch
 from assistive_functions import to_tensor
-
+import torch.nn as nn
 from config import device
 
 

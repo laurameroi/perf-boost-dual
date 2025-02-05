@@ -34,6 +34,7 @@ class TrainableRobotsSystem(RobotsSystem):
         self.n_agents = int(self.x_target.shape[1]/4)
         self.state_dim = 4*self.n_agents
         self.in_dim = 2*self.n_agents
+        self.output_dim = self.state_dim #TODO
         assert self.x_target.shape[1] == self.state_dim and self.x_init.shape[1] == self.state_dim
         assert self.u_init.shape[1] == self.in_dim
 
@@ -66,7 +67,6 @@ class TrainableRobotsSystem(RobotsSystem):
         b_temp[3, 1] = 1/self.mass
         B = torch.kron(torch.eye(self.n_agents), b_temp) * self.h
         B = B.to(x.device)
-        assert B.requires_grad
 
         _A1 = torch.eye(4*self.n_agents)
         mat1 = torch.zeros(2,2)
@@ -83,7 +83,6 @@ class TrainableRobotsSystem(RobotsSystem):
         _A2 = torch.kron(torch.eye(self.n_agents), _A2)
         A_lin = _A1 + self.h * _A2
         A_lin = A_lin.to(x.device)
-        assert A_lin.requires_grad
 
         x = x.view(-1, 1, self.state_dim)
         u = u.view(-1, 1, self.in_dim)

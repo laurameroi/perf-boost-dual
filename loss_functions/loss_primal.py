@@ -2,12 +2,12 @@ import torch
 from config import device
 
 
-class NonLinear2DLoss():
+class LossPrimal():
     def __init__(self, xbar, Q):
         self.Q = Q
         self.xbar = xbar.unsqueeze(1)
 
-    def forward(self, xs):
+    def forward(self, xs, us):
         """
         Compute loss.
 
