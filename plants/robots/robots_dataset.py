@@ -68,12 +68,14 @@ def generate_sinusoidal_dataset(num_samples=50, ts=0.05, horizon=10, input_dim=2
     data = torch.zeros(num_samples, len(time), input_dim)
     for n in range(num_samples):
         # Generate random parameters for the current sample
-        frequency_x = np.random.uniform(1, 2)  # Horizontal frequency between 0.5 Hz and 5 Hz
-        frequency_y = np.random.uniform(1, 2)  # Vertical frequency between 0.5 Hz and 5 Hz
-        amplitude_x = np.random.uniform(0.5, 3)  # Horizontal amplitude between 0.5 and 3
-        amplitude_y = np.random.uniform(0.5, 3)  # Vertical amplitude between 0.5 and 3
-        phase_x = np.random.uniform(-np.pi, np.pi)  # Horizontal phase between -π and π
-        phase_y = np.random.uniform(-np.pi, np.pi)  # Vertical phase between -π and π
+        frequency_x = np.random.uniform(0.1, 5)  # Horizontal frequency between 0.5 Hz and 5 Hz
+        frequency_y = np.random.uniform(0.1, 5)  # Vertical frequency between 0.5 Hz and 5 Hz
+        amplitude_x = np.random.uniform(0.1, 5)  # Horizontal amplitude between 0.5 and 3
+        amplitude_y = np.random.uniform(0.1, 5)  # Vertical amplitude between 0.5 and 3
+        #phase_x = np.random.uniform(-np.pi, np.pi)  # Horizontal phase between -π and π
+        #phase_y = np.random.uniform(-np.pi, np.pi)  # Vertical phase between -π and π
+        phase_x = 0
+        phase_y = 0
 
         # Generate the signals using the random parameters
         horizontal_force = generate_sinusoidal(frequency_x, amplitude_x, phase_x, time)

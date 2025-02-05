@@ -99,9 +99,8 @@ class ContractiveREN(nn.Module):
         else:
             assert isinstance(internal_state_init, torch.Tensor)
             self.x = internal_state_init.reshape(1, 1, self.dim_internal)
-        self.register_buffer('init_x', self.x.detach().clone())
-        print('Contractive REN', self.init_x, y_init)
-
+        self.register_buffer('x_init', self.x.detach().clone())
+        self.register_buffer('y_init', F.linear(self.x_init, self.C2))
     def _update_model_param(self):
         """
         Update non-trainable matrices according to the REN formulation to preserve contraction.
@@ -157,9 +156,15 @@ class ContractiveREN(nn.Module):
         y_out = F.linear(self.x, self.C2) + F.linear(w, self.D21) + F.linear(u_in, self.D22)
         return y_out
 
+    def rollout(self, u_in):
+        y_log = self.y_init.detach().clone().repeat(u_in.shape[0], 1, 1)
+        for t in range(u_in.shape[1]-1):
+            y_log = torch.cat((y_log, self.forward(u_in[:, t:t+1, :])), 1)
+        #note that the last input is not used
+        return y_log
 
     def reset(self):
-        self.x = self.init_x  # reset the REN state to the initial value
+        self.x = self.x_init  # reset the REN state to the initial value
 
     # init trainable params
     def _init_trainable_params(self, initialization_std):

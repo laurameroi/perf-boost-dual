@@ -14,7 +14,7 @@ def argument_parser():
     parser.add_argument('--horizon', type=int, default=100, help='Time horizon for the computation. Default is 100.')
     parser.add_argument('--n-agents', type=int, default=1, help='Number of agents. Default is 1.')
     parser.add_argument('--num-rollouts', type=int, default=30, help='Number of rollouts in the training data. Default is 30.')
-    parser.add_argument('--input-noise-std', type=float, default=0.0, help='std of the noise on the input to the plant (d). Default is 0.0.')
+    parser.add_argument('--input-noise-std', type=float, default=0.2, help='std of the noise on the input to the plant (d). Default is 0.0.')
     parser.add_argument('--output-noise-std', type=float, default=0.2, help='std of the noise on the plant output (v). Default is 0.2.')
 
     # dataset dual
@@ -45,7 +45,7 @@ def argument_parser():
 
     # optimizer primal
     parser.add_argument('--batch-size', type=int, default=5, help='Number of forward trajectories of the closed-loop system at each step. Default is 5.')
-    parser.add_argument('--epochs', type=int, default=5, help='Total number of epochs for training. Default is 5000 if collision avoidance, else 100.')
+    parser.add_argument('--epochs', type=int, default=500, help='Total number of epochs for training. Default is 5000 if collision avoidance, else 100.')
     parser.add_argument('--lr', type=float, default=1e-2, help='Learning rate. Default is 2e-3 if collision avoidance, else 5e-3.')
     parser.add_argument('--log-epoch', type=int, default=-1, help='Frequency of logging in epochs. Default is 0.1 * epochs.')
     parser.add_argument('--return-best', type=str2bool, default=True, help='Return the best model on the validation data among all logged iterations. The train data can be used instead of validation data. The Default is True.')

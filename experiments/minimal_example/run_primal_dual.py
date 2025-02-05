@@ -54,7 +54,9 @@ sys = RobotsSystem(input_noise_std=args.input_noise_std,
 openloop_data_out, openloop_data_in = dataset.generate_openloop_dataset(
     num_samples=args.num_samples_sysid, ts=0.05, noise_only_on_init=False, sys=sys
 )
-# NOTE: initial condition is always fixed and there's no noise on it.
+openloop_data_out_test, openloop_data_in_test = dataset.generate_openloop_dataset(
+    num_samples=100, ts=0.05, noise_only_on_init=False, sys=sys
+)
 
 fig, axs = plt.subplots(1, 2, figsize=(10, 5))
 for n in range(args.num_samples_sysid):
@@ -65,168 +67,64 @@ axs[1].set_title('noisy output data of the plant')
 plt.savefig('openloop_data.png')
 
 #-----------------------Dual initial step: learn G0 from open loop data--------------------------
-#SSM with parallel scan
-# set up a simple architecture
-'''
-cfg = {
-    "n_u": 2,
-    "n_y": 4,
-    "d_model": 5,
-    "d_state": 5,
-    "n_layers": 3,
-    "ff": "LMLP",  # GLU | MLP | LMLP
-    "max_phase": math.pi,
-    "r_min": 0.7,
-    "r_max": 0.98,
-    "gamma": False,
-    "trainable": False,
-    "gain": 2.4
-}
-cfg = Namespace(**cfg)
-
-# Build model
-config = DWNConfig(d_model=cfg.d_model, d_state=cfg.d_state, n_layers=cfg.n_layers, ff=cfg.ff, rmin=cfg.r_min,
-                   rmax=cfg.r_max, max_phase=cfg.max_phase, gamma=cfg.gamma, trainable=cfg.trainable, gain=cfg.gain)
-
-G0 = DWN(cfg.n_u, cfg.n_y, config)
-
-# Define the loss function
-loss_fn_dual = torch.nn.MSELoss()
-
-# Define the optimizer and learning rate
-optimizer = torch.optim.Adam(G0.parameters(), lr=args.lr)
-optimizer.zero_grad()
-
-# Training loop settings
-LOSS = np.zeros(args.epochs)
-
-for epoch in range(args.epochs):
-    optimizer.zero_grad()  # Reset gradients
-
-    # Forward pass through the SSM
-    ySSM, _ = G0(openloop_data_in, state=None, mode="scan")
-    ySSM = torch.squeeze(ySSM)  # Remove unnecessary dimensions
-
-    # Calculate the mean squared error loss
-    loss = loss_fn_dual(ySSM, openloop_data_out)
-    loss.backward()  # Backpropagate to compute gradients
-    optimizer.step()
-
-    # Print loss for each epoch
-    print(f"Epoch: {epoch + 1} \t||\t Loss: {loss}")
-    LOSS[epoch] = loss
-# Plot the training loss over epochs
-plt.figure(figsize=(10, 6))
-plt.plot(np.arange(args.epochs), LOSS, label='Training Loss', color='blue')
-plt.title('Training Loss vs. Epochs')
-plt.xlabel('Epoch')
-plt.ylabel('Loss')
-plt.grid(True)
-plt.legend()
-plt.show()
-
-# Plot some example predictions vs true values
-n_example = 5  # Number of example trajectories to plot
-
-plt.figure(figsize=(12, 8))
-for i in range(min(n_example, openloop_data_in.shape[0])):
-    true_values = openloop_data_out[i, :, :].detach().numpy()  # True output (shape: T, 4)
-    predicted_values = ySSM[i, :, :].detach().numpy()  # Predicted output from the model (shape: T, 4)
-
-    # Plot true vs predicted for each example
-    plt.subplot(min(n_example, 5), 1, i + 1)
-    plt.plot(true_values[:, 0], label='True Output - 1st dimension')
-    plt.plot(predicted_values[:, 0], label='Predicted Output - 1st dimension', linestyle='--')
-    plt.title(f'Example {i + 1}')
-    plt.xlabel('Time Steps')
-    plt.ylabel('Output Value')
-    plt.legend()
-    plt.grid(True)
-
-plt.tight_layout()
-plt.show()
-
-#validation
-# Forward pass through the SSM for validation data
-ySSM_val, _ = G0(openloop_data_in_val, state=None, mode="scan")
-yval = torch.squeeze(yval)
-
-# Compute validation loss
-loss_val = MSE(ySSM_val, openloop_data_out_val)
-'''
-
 # Create the model G0
 G0 = ContractiveREN(
     input_dim=sys.input_dim, output_dim=sys.output_dim,
     dim_internal=args.dim_internal, dim_nl=args.dim_nl, 
-    y_init=sys.y_init.detach().clone()   # initialize the hidden state of REN s.t. initial REN output close to the nominal initial output of the plant
+    y_init=sys.y_init_nominal.detach().clone()   # initialize the hidden state of REN s.t. initial REN output close to the nominal initial output of the plant
 ).to(device)
 
 # plot before training
-n_example = 5  # Number of example trajectories to plot
+n_example = 2  # Number of example trajectories to plot
 plt.figure(figsize=(10, 6))
-for n in range(min(n_example, openloop_data_in.shape[0])):
-    true_values = openloop_data_out[n, :, :].detach().cpu().numpy()  # True output (shape: T, 4)
-    predicted_values = np.zeros_like(true_values)
-
-    G0.reset()  # Reset model for the trajectory
-    for t in range(openloop_data_in.shape[1]):
-        u = openloop_data_in[n, t, :].unsqueeze(0)  # Input for time t
-        u = u.unsqueeze(1)  # Shape (1, 1, 2)
-        y_hat = G0(u)  # Forward pass
-        predicted_values[t, :] = y_hat.squeeze().detach().cpu().numpy()
-
-    # Plot true vs predicted for each example
-    plt.subplot(min(n_example, 5), 1, n + 1)
-    plt.plot(true_values[:, 0], label='True Output - 1st dimension')
-    plt.plot(predicted_values[:, 0], label='Predicted Output - 1st dimension', linestyle='--')
-    plt.title(f'Example {n + 1}')
-    plt.xlabel('Time Steps')
-    plt.ylabel('Output Value')
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
-    plt.grid(True)
+true_values = openloop_data_out_test[range(n_example), :, :].detach().cpu().numpy()
+G0.reset()  # Reset model for the trajectory
+predicted_values = G0.rollout(openloop_data_in_test[range(n_example), :, :]).detach().cpu().numpy()
+# Plot true vs predicted for each example
+fig, axs =plt.subplots(min(n_example, 5), 1)
+for n in range(n_example):
+    axs[n].plot(true_values[n, :, 0], label='True Output - 1st dimension')
+    axs[n].plot(predicted_values[n, :, 0], label='Predicted Output - 1st dimension', linestyle='--')
+    axs[n].set_title(f'Example on test data {n + 1}')
+    axs[n].set_xlabel('Time Steps')
+    axs[n].set_ylabel('Output Value')
+plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
+plt.grid(True)
 
 plt.tight_layout()
 plt.savefig('G0_init')
 
-
 # Define the optimizer and learning rate
 optimizer = torch.optim.Adam(G0.parameters(), lr=args.lr)
-
 # Define the loss function
 loss_fn_dual = torch.nn.MSELoss()
-
 # Training loop settings
 LOSS = np.zeros(args.epochs)
 
+#-----------training--------------
 start_time = time.time()
 for epoch in range(args.epochs):
     total_loss = 0.0  # Initialize loss for reporting
+    G0.reset()  # Reset model state
+    predicted_values = G0.rollout(openloop_data_in)
+    loss = loss_fn_dual(openloop_data_out, predicted_values)
 
-    # Training loop
-    for n in range(openloop_data_in.shape[0]):  # Loop over trajectories
-        G0.reset()  # Reset model state
-        loss = 0.0  # Reset loss for this trajectory
+    loss.backward()
+    optimizer.step()
+    optimizer.zero_grad()  # Reset gradients before next trajectory
 
-        for t in range(openloop_data_in.shape[1]):  # Loop over time steps
-            u = openloop_data_in[n, t, :].unsqueeze(0).unsqueeze(1)  # (1,1,2)
-            y = openloop_data_out[n, t, :].unsqueeze(0).unsqueeze(1)  # (1,1,4)
-
-            y_hat = G0(u)  # Forward pass
-            loss += loss_fn_dual(y, y_hat)  # Accumulate loss over time
-
-        # Backpropagate after the entire trajectory
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()  # Reset gradients before next trajectory
-
-        total_loss += loss.item()  # Accumulate for reporting
-
-    LOSS[epoch] = total_loss
+    LOSS[epoch] = loss
 
     # Print training loss for this epoch
     print(f"Epoch: {epoch + 1} \t||\t Training Loss: {LOSS[epoch]} \t||\t Elapsed Time: {time.time()-start_time}")
 
+with torch.no_grad():
+    G0.reset()
+    loss_test = loss_fn_dual(openloop_data_out_test, G0.rollout(openloop_data_in_test))
+print('loss test', loss_test)
+
+
+#-------------plots----------------
 # Plot training loss
 plt.figure(figsize=(10, 6))
 plt.plot(np.arange(args.epochs), LOSS, label='Training Loss', color='blue')
@@ -238,32 +136,27 @@ plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
 plt.savefig('loss')
 
 # Plot some example predictions vs true values
-
+# plot before training
+n_example = 2  # Number of example trajectories to plot
 plt.figure(figsize=(10, 6))
-for n in range(min(n_example, openloop_data_in.shape[0])):
-    true_values = openloop_data_out[n, :, :].detach().cpu().numpy()  # True output (shape: T, 4)
-    predicted_values = np.zeros_like(true_values)
-
-    G0.reset()  # Reset model for the trajectory
-    for t in range(openloop_data_in.shape[1]):
-        u = openloop_data_in[n, t, :].unsqueeze(0)  # Input for time t
-        u = u.unsqueeze(1)  # Shape (1, 1, 2)
-        y_hat = G0(u)  # Forward pass
-        predicted_values[t, :] = y_hat.squeeze().detach().cpu().numpy()
-
-    # Plot true vs predicted for each example
-    plt.subplot(min(n_example, 5), 1, n + 1)
-    plt.plot(true_values[:, 0], label='True Output - 1st dimension')
-    plt.plot(predicted_values[:, 0], label='Predicted Output - 1st dimension', linestyle='--')
-    plt.title(f'Example {n + 1}')
-    plt.xlabel('Time Steps')
-    plt.ylabel('Output Value')
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
-    plt.grid(True)
+true_values = openloop_data_out_test[range(n_example), :, :].detach().cpu().numpy()
+G0.reset()  # Reset model for the trajectory
+predicted_values = G0.rollout(openloop_data_in_test[range(n_example), :, :]).detach().cpu().numpy()
+# Plot true vs predicted for each example
+fig, axs =plt.subplots(min(n_example, 5), 1)
+for n in range(n_example):
+    axs[n].plot(true_values[n, :, 0], label='True Output - 1st dimension')
+    axs[n].plot(predicted_values[n, :, 0], label='Predicted Output - 1st dimension', linestyle='--')
+    axs[n].set_title(f'Example on test data {n + 1}')
+    axs[n].set_xlabel('Time Steps')
+    axs[n].set_ylabel('Output Value')
+plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
+plt.grid(True)
 
 plt.tight_layout()
 plt.savefig('G0_trained')
 exit()
+
 #--------- primal step dataset------------
 train_data_full = sys.generate_output_noise(num_samples = args.num_rollouts, horizon = args.horizon, noise_only_on_init=True, output_noise_std=0.1)
 test_data = sys.generate_input_noise(num_samples = args.num_rollouts, horizon = args.horizon, noise_only_on_init=True, input_noise_std=0.1)
@@ -321,14 +214,12 @@ loss_fn_primal = RobotsLoss(
     n_agents=args.n_agents,
 )
 # ------------ 5. Training primal ------------
-
 ctl.fit(
     sys=sys, train_dataloader=train_dataloader, valid_data=valid_data,
     lr=args.lr, loss_fn=loss_fn_primal, epochs=args.epochs, log_epoch=args.log_epoch,
     return_best=args.return_best, logger=logger, early_stopping=args.early_stopping,
     n_logs_no_change=args.n_logs_no_change, tol_percentage=args.tol_percentage
 )
-
 # ------ 6. Save and evaluate the trained model ------
 # save
 res_dict = ctl.emme.state_dict()

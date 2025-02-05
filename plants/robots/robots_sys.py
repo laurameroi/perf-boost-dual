@@ -77,8 +77,7 @@ class RobotsSystem(torch.nn.Module):
         D = torch.zeros(self.output_dim, self.output_dim)
         self.register_buffer('D', D)
 
-        self.register_buffer('y_init', F.linear(self.x_init, self.C) + F.linear(self.u_init, self.D))
-        print('robots y init ', self.y_init)
+        self.register_buffer('y_init_nominal', F.linear(self.x_init, self.C))
         
     def A_nonlin(self):
         assert not self.linear_plant
@@ -103,10 +102,13 @@ class RobotsSystem(torch.nn.Module):
             - u (torch.Tensor): plant's input at t. shape = (batch_size, 1, input_dim)
 
         Returns:
-            next state of the noise-free dynamics.
+            output at time t of the noise-free dynamics.
         """
         self.x = self.x.view(-1, 1, self.state_dim)
         u = u.view(-1, 1, self.input_dim)
+        y = F.linear(self.x, self.C) + F.linear(u, self.D)
+
+        # compute next state
         if self.linear_plant:
             # x is batched but A is not => can use F.linear to compute xA^T
             x_next = F.linear(self.x - self.x_target, self.A_lin) + F.linear(u, self.B) + self.x_target
@@ -118,9 +120,8 @@ class RobotsSystem(torch.nn.Module):
                 x_next = (F.linear(self.x - self.x_target, self.A_lin)
                      + self.h * self.b2 / self.mass * self.mask.view(-1) * torch.tanh(self.x - self.x_target)
                      + F.linear(u, self.B) + self.x_target)
-        y_next = F.linear(x_next, self.C) + F.linear(u, self.D)
         self.x = x_next
-        return y_next    # shape = (batch_size, 1, output_dim)
+        return y    # shape = (batch_size, 1, output_dim)
 
     def forward(self, t, u, w):
         """
@@ -132,7 +133,7 @@ class RobotsSystem(torch.nn.Module):
             - w (torch.Tensor): process noise at t. shape = (batch_size, 1, state_dim)
 
         Returns:
-            next state.
+            noisy output of the plant at time t
         """
         return self.noiseless_forward(t, u) + w.view(-1, 1, self.output_dim)
 
@@ -157,8 +158,8 @@ class RobotsSystem(torch.nn.Module):
 
         # Simulate
         for t in range(data.shape[1]):
-            y = self.forward(t=t, u=u, w=data[:, t:t+1, :])
-            u = controller(y)                                       # shape = (batch_size, 1, input_dim)
+            y = self.forward(t=t, u=u, w=data[:, t:t+1, :]) # y_t, x_{t+1} gets stored in self.x
+            u = controller(y)                               # u_{t+1} shape = (batch_size, 1, input_dim)
 
             if t == 0:
                 y_log, u_log = y, u
@@ -186,7 +187,7 @@ class RobotsSystem(torch.nn.Module):
                 (batch_size, T, state_dim).
 
         Rerurn:
-            - x_log of shape = (batch_size, T, state_dim)
+            - y_log of shape = (batch_size, T, output_dim)
         """
         if output_noise is None:
             output_noise = torch.zeros(u.shape[0], u.shape[1], self.output_dim)
@@ -195,12 +196,14 @@ class RobotsSystem(torch.nn.Module):
         assert output_noise.shape[0]==u.shape[0] and output_noise.shape[1]==u.shape[1]
 
         u = u.detach().clone()
-        y = self.y_init.detach().clone().repeat(output_noise.shape[0], 1, 1) + output_noise[:, 0:1, :]
-        y_log = y
+
         # Simulate
-        for t in range(output_noise.shape[1]-1):
-            y = self.forward(t=t, u=u[:, t:t+1, :], w=output_noise[:, t+1:t+2, :])    # shape = (batch_size, 1, state_dim)                                     # shape = (batch_size, 1, input_dim)
-            y_log = torch.cat((y_log, y), 1)
+        for t in range(output_noise.shape[1]):
+            y = self.forward(t=t, u=u[:, t:t+1, :], w=output_noise[:, t:t+1, :])    # y_t. x_{t+1} gets updated. shape = (batch_size, 1, output_dim)                                     # shape = (batch_size, 1, input_dim)f t == 0:
+            if t==0:
+                y_log = y
+            else:
+                y_log = torch.cat((y_log, y), 1)
 
         if not train:
             y_log = y_log.detach()
