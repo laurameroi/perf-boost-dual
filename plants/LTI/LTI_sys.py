@@ -9,11 +9,11 @@ class LTISystem:
 
         # Dimensions
         self.state_dim = self.A.shape[0]
-        self.in_dim = self.B.shape[1]
+        self.input_dim = self.B.shape[1]
         self.out_dim = self.C.shape[0]
         # Check matrices
         assert self.A.shape == (self.state_dim, self.state_dim)
-        assert self.B.shape == (self.state_dim, self.in_dim)
+        assert self.B.shape == (self.state_dim, self.input_dim)
         assert self.C.shape == (self.out_dim, self.state_dim)
         assert self.x_init.shape == (self.state_dim, 1)
 

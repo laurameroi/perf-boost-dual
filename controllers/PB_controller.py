@@ -59,23 +59,23 @@ class PerfBoostController(nn.Module):
         self.output_init = output_init.reshape(1, -1)
 
         # set dimensions
-        self.dim_in = self.input_init.shape[-1]
-        self.dim_out = self.output_init.shape[-1]
+        self.input_dim = self.input_init.shape[-1]
+        self.output_dim = self.output_init.shape[-1]
 
         # set type of nn for emme
         self.nn_type = nn_type
         # define Emme as REN or SSM
         if nn_type == "REN":
             self.emme = ContractiveREN(
-                dim_in=self.dim_in, dim_out=self.dim_out, dim_internal=dim_internal,
+                input_dim=self.input_dim, output_dim=self.output_dim, dim_internal=dim_internal,
                 dim_nl=dim_nl, initialization_std=initialization_std,
                 internal_state_init=ren_internal_state_init,
                 pos_def_tol=pos_def_tol, contraction_rate_lb=contraction_rate_lb
             ).to(device)
         elif nn_type == "SSM":
             # define the SSM
-            self.emme = DeepSSM(self.dim_in,
-                                self.dim_out,
+            self.emme = DeepSSM(self.input_dim,
+                                self.output_dim,
                                 dim_internal,
                                 dim_middle=6,
                                 dim_hidden=dim_nl,
@@ -108,23 +108,23 @@ class PerfBoostController(nn.Module):
         Forward pass of the controller.
 
         Args:
-            input_t (torch.Tensor): Input with the size of (batch_size, 1, self.dim_in).
+            input_t (torch.Tensor): Input with the size of (batch_size, 1, self.input_dim).
             # NOTE: when used in closed-loop, "input_t" is the measured states.
 
         Return:
-            y_out (torch.Tensor): Output with (batch_size, 1, self.dim_out).
+            y_out (torch.Tensor): Output with (batch_size, 1, self.output_dim).
         """
 
         # apply noiseless forward to get noise less input (noise less state of the plant)
         u_noiseless = self.internal_model.forward(
             u=self.last_output  # last output of the controller is the last input to the plant
-        )  # shape = (self.batch_size, 1, self.dim_in)
+        )  # shape = (self.batch_size, 1, self.input_dim)
 
         # reconstruct the noise
-        w_ = input_t - u_noiseless  # shape = (self.batch_size, 1, self.dim_in)
+        w_ = input_t - u_noiseless  # shape = (self.batch_size, 1, self.input_dim)
         # apply REN or SSM
         output = self.emme.forward(w_)
-        output = output * self.output_amplification  # shape = (self.batch_size, 1, self.dim_out)
+        output = output * self.output_amplification  # shape = (self.batch_size, 1, self.output_dim)
 
         # update internal states
         self.last_input, self.last_output = input_t, output

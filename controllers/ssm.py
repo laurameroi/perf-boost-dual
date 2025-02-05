@@ -26,9 +26,9 @@ class LRU(nn.Module):
 
         # set dimensions
         self.dim_internal = state_features
-        self.dim_in = in_features
+        self.input_dim = in_features
         self.scan = scan
-        self.dim_out = out_features
+        self.output_dim = out_features
 
         self.D = nn.Parameter(torch.randn([out_features, in_features]) / math.sqrt(in_features))
         u1 = torch.rand(state_features)
@@ -65,9 +65,9 @@ class LRU(nn.Module):
         """
         Forward pass of SSM.
         Args:
-            u_in (torch.Tensor): Input with the size of (batch_size, 1, self.dim_in).
+            u_in (torch.Tensor): Input with the size of (batch_size, 1, self.input_dim).
         Return:
-            y_out (torch.Tensor): Output with (batch_size, 1, self.dim_out).
+            y_out (torch.Tensor): Output with (batch_size, 1, self.output_dim).
         """
         batch_size = u_in.shape[0]
 
@@ -86,8 +86,8 @@ class LRU(nn.Module):
 class SSM(nn.Module):
     # Scaffolding can be modified. In this case we have LRU, MLP plus linear skip connection.
     def __init__(self,
-                 dim_in: int,
-                 dim_out: int,
+                 input_dim: int,
+                 output_dim: int,
                  dim_internal: int,
                  scan: bool = False,
                  dim_hidden: int = 30,
@@ -100,26 +100,26 @@ class SSM(nn.Module):
         super().__init__()
 
         # set dimensions
-        self.dim_in = dim_in
-        self.dim_out = dim_out
+        self.input_dim = input_dim
+        self.output_dim = output_dim
         self.dim_internal = dim_internal
         self.dim_hidden = dim_hidden
 
         if non_linearity == "MLP":
-            self.scaffold = MLP(dim_out, dim_hidden, dim_out)
+            self.scaffold = MLP(output_dim, dim_hidden, output_dim)
         elif non_linearity == "coupling_layers":
             # Option 2: coupling (or invertible) layers
-            self.scaffold = CouplingLayer(dim_out, dim_hidden)
+            self.scaffold = CouplingLayer(output_dim, dim_hidden)
         elif non_linearity == "hamiltonian":
             # Option 3: Hamiltonian net
-            self.scaffold = HamiltonianSIE(n_layers=4, nf=dim_out, bias=False)
+            self.scaffold = HamiltonianSIE(n_layers=4, nf=output_dim, bias=False)
         elif non_linearity == "tanh":
             self.scaffold = torch.tanh
         else:
             # End options
             raise NotImplementedError("The non_linearity %s is not implemented" % non_linearity)
-        self.lru = LRU(dim_in, dim_out, dim_internal, scan, rmin, rmax, max_phase, internal_state_init)
-        self.lin = nn.Linear(dim_in, dim_out, bias=False)
+        self.lru = LRU(input_dim, output_dim, dim_internal, scan, rmin, rmax, max_phase, internal_state_init)
+        self.lin = nn.Linear(input_dim, output_dim, bias=False)
         nn.init.zeros_(self.lin.weight.data)
 
     def forward(self, u):
@@ -144,8 +144,8 @@ class SSM(nn.Module):
 # Class implementing a cascade of N SSMs. Linear pre- and post-processing can be modified
 class DeepSSM(nn.Module):
     def __init__(self,
-                 dim_in: int,
-                 dim_out: int,
+                 input_dim: int,
+                 output_dim: int,
                  dim_internal: int,
                  dim_middle: int,
                  dim_hidden: int = 30,
@@ -160,13 +160,13 @@ class DeepSSM(nn.Module):
         super().__init__()
 
         # set dimensions
-        self.dim_in = dim_in
-        self.dim_out = dim_out
+        self.input_dim = input_dim
+        self.output_dim = output_dim
         self.dim_internal = dim_internal
         self.dim_hidden = dim_hidden
 
-        self.ssm1 = SSM(dim_in, dim_middle, dim_internal, dim_hidden=dim_hidden, non_linearity=non_linearity)
-        self.ssm2 = SSM(dim_middle, dim_out, dim_internal, dim_hidden=dim_hidden, non_linearity=non_linearity)
+        self.ssm1 = SSM(input_dim, dim_middle, dim_internal, dim_hidden=dim_hidden, non_linearity=non_linearity)
+        self.ssm2 = SSM(dim_middle, output_dim, dim_internal, dim_hidden=dim_hidden, non_linearity=non_linearity)
 
     def forward(self, u_in):
         y_out = self.ssm2(self.ssm1(u_in))
@@ -191,13 +191,13 @@ class DeepSSM(nn.Module):
 
 
 if __name__ == "__main__":
-    dim_in = 2
-    dim_out = 2
+    input_dim = 2
+    output_dim = 2
     dim_internal = 4
     dim_hidden = 8
     batch_size = 3
-    ssm = SSM(dim_in, dim_out, dim_internal, scan=False, dim_hidden=dim_hidden, non_linearity="hamiltonian")
-    deep_ssm = DeepSSM(dim_in, dim_out, dim_internal, dim_middle=6, dim_hidden=dim_hidden, non_linearity="hamiltonian")
+    ssm = SSM(input_dim, output_dim, dim_internal, scan=False, dim_hidden=dim_hidden, non_linearity="hamiltonian")
+    deep_ssm = DeepSSM(input_dim, output_dim, dim_internal, dim_middle=6, dim_hidden=dim_hidden, non_linearity="hamiltonian")
 
     # Print dimensions:
     print("B has dimensions: ", ssm.lru.B.shape)
@@ -213,11 +213,11 @@ if __name__ == "__main__":
     # print(param_dict)
 
     t = torch.linspace(0, 1, 100)
-    u = torch.zeros(batch_size, t.shape[0], dim_in)
+    u = torch.zeros(batch_size, t.shape[0], input_dim)
     for i in range(batch_size):
-        u[i, 0, :] = torch.randn(dim_in)
-    y_ssm = torch.zeros(batch_size, t.shape[0], dim_out)
-    y_deep_ssm = torch.zeros(batch_size, t.shape[0], dim_out)
+        u[i, 0, :] = torch.randn(input_dim)
+    y_ssm = torch.zeros(batch_size, t.shape[0], output_dim)
+    y_deep_ssm = torch.zeros(batch_size, t.shape[0], output_dim)
     x_ssm = torch.complex(torch.zeros(batch_size, t.shape[0], dim_internal), torch.zeros(1, t.shape[0], dim_internal))
     x_deep_ssm = torch.complex(torch.zeros(batch_size, t.shape[0], dim_internal),
                                torch.zeros(1, t.shape[0], dim_internal))

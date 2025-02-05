@@ -14,17 +14,18 @@ def argument_parser():
     parser.add_argument('--horizon', type=int, default=100, help='Time horizon for the computation. Default is 100.')
     parser.add_argument('--n-agents', type=int, default=1, help='Number of agents. Default is 1.')
     parser.add_argument('--num-rollouts', type=int, default=30, help='Number of rollouts in the training data. Default is 30.')
-    parser.add_argument('--std-noise', type=float, default=0.2, help='std of the noise (plant initial conditions). Default is 0.2.')
+    parser.add_argument('--input-noise-std', type=float, default=0.0, help='std of the noise on the input to the plant (d). Default is 0.0.')
+    parser.add_argument('--output-noise-std', type=float, default=0.2, help='std of the noise on the plant output (v). Default is 0.2.')
 
     # dataset dual
-    parser.add_argument('--num_signals_sysid', type=int, default=50, help='Number of signals in the training data.. Default is 50.')
+    parser.add_argument('--num_samples_sysid', type=int, default=50, help='Number of signals in the training data.. Default is 50.')
 
     # plant
     parser.add_argument('--spring-const', type=float, default=1.0 , help='Spring constant. Default is 1.0.')
     parser.add_argument('--linearize-plant', type=str2bool, default=True, help='Linearize plant or not. Default is False.')
 
     # controller
-    parser.add_argument('--nn-type', type=str, default='SSM',
+    parser.add_argument('--nn-type', type=str, default='REN',
                         help='Type of the NN for operator Emme in controller. Options: REN or SSM. Default is REN')
     parser.add_argument('--non-linearity', type=str,
                         help='Type of non_linearity in SSMs. Options: MLP, coupling_layers, hamiltonian, tanh. '
@@ -107,7 +108,7 @@ def argument_parser():
 
 def print_args(args):
     msg = '\n[INFO] Dataset: n_agents: %i' % args.n_agents + ' -- num_rollouts: %i' % args.num_rollouts
-    msg += ' -- std_noise: %.2f' % args.std_noise + ' -- time horizon: %i' % args.horizon
+    msg += ' -- input noise std: %.2f' % args.input_noise_std + ' -- output noise std: %.2f' % args.output_noise_std + ' -- time horizon: %i' % args.horizon
 
     msg += '\n[INFO] Plant: spring constant: %.2f' % args.spring_const + ' -- use linearized plant: ' + str(args.linearize_plant)
 

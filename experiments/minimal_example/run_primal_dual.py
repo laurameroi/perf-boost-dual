@@ -1,4 +1,4 @@
-import os, sys, copy
+import os, sys, time
 import logging
 import torch
 import numpy as np
@@ -19,7 +19,7 @@ from loss_functions import RobotsLoss
 from assistive_functions import WrapLogger
 import math
 from argparse import Namespace
-from controllers.SSMs import DWN, DWNConfig
+# from controllers.SSMs import DWN, DWNConfig
 
 args = argument_parser()
 
@@ -39,26 +39,30 @@ logger.info(msg)
 torch.manual_seed(args.random_seed)
 
 # ------------ 1. Plant ------------
-dataset = RobotsDataset(random_seed=args.random_seed, horizon=args.horizon, std_noise=args.std_noise, n_agents=1)
+dataset = RobotsDataset(random_seed=args.random_seed, horizon=args.horizon, n_agents=1)
 
-plant_input_init = None     # all zero
-
-sys = RobotsSystem(x_target=dataset.x_target,
+sys = RobotsSystem(input_noise_std=args.input_noise_std,
+                   output_noise_std=args.output_noise_std,
+                   x_target=dataset.x_target,
                    x_init=dataset.x_init,
-                   u_init=plant_input_init,
+                   u_init=None, # zero
                    linear_plant=args.linearize_plant,
+                   k=args.spring_const
                    ).to(device)
 
 # ------------ Open loop data collection ------------
 openloop_data_out, openloop_data_in = dataset.generate_openloop_dataset(
-    num_signals=args.num_signals_sysid, ts=0.05, noise_only_on_init=True, sys=sys
+    num_samples=args.num_samples_sysid, ts=0.05, noise_only_on_init=False, sys=sys
 )
+# NOTE: initial condition is always fixed and there's no noise on it.
 
 fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-for n in range(args.num_signals_sysid):
+for n in range(args.num_samples_sysid):
     axs[0].plot(openloop_data_in[n, :, 0].detach().cpu().numpy())
     axs[1].plot(openloop_data_out[n, :, 0].detach().cpu().numpy())
-plt.savefig('foo.png')
+axs[0].set_title('noisy reference data to the plant')
+axs[1].set_title('noisy output data of the plant')
+plt.savefig('openloop_data.png')
 
 #-----------------------Dual initial step: learn G0 from open loop data--------------------------
 #SSM with parallel scan
@@ -153,9 +157,38 @@ loss_val = MSE(ySSM_val, openloop_data_out_val)
 
 # Create the model G0
 G0 = ContractiveREN(
-    dim_in=sys.in_dim, dim_out=sys.state_dim,
-    dim_internal=args.dim_internal, dim_nl=args.dim_nl, y_init=sys.x_init
+    input_dim=sys.input_dim, output_dim=sys.output_dim,
+    dim_internal=args.dim_internal, dim_nl=args.dim_nl, 
+    y_init=sys.y_init.detach().clone()   # initialize the hidden state of REN s.t. initial REN output close to the nominal initial output of the plant
 ).to(device)
+
+# plot before training
+n_example = 5  # Number of example trajectories to plot
+plt.figure(figsize=(10, 6))
+for n in range(min(n_example, openloop_data_in.shape[0])):
+    true_values = openloop_data_out[n, :, :].detach().cpu().numpy()  # True output (shape: T, 4)
+    predicted_values = np.zeros_like(true_values)
+
+    G0.reset()  # Reset model for the trajectory
+    for t in range(openloop_data_in.shape[1]):
+        u = openloop_data_in[n, t, :].unsqueeze(0)  # Input for time t
+        u = u.unsqueeze(1)  # Shape (1, 1, 2)
+        y_hat = G0(u)  # Forward pass
+        predicted_values[t, :] = y_hat.squeeze().detach().cpu().numpy()
+
+    # Plot true vs predicted for each example
+    plt.subplot(min(n_example, 5), 1, n + 1)
+    plt.plot(true_values[:, 0], label='True Output - 1st dimension')
+    plt.plot(predicted_values[:, 0], label='Predicted Output - 1st dimension', linestyle='--')
+    plt.title(f'Example {n + 1}')
+    plt.xlabel('Time Steps')
+    plt.ylabel('Output Value')
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
+    plt.grid(True)
+
+plt.tight_layout()
+plt.savefig('G0_init')
+
 
 # Define the optimizer and learning rate
 optimizer = torch.optim.Adam(G0.parameters(), lr=args.lr)
@@ -166,6 +199,7 @@ loss_fn_dual = torch.nn.MSELoss()
 # Training loop settings
 LOSS = np.zeros(args.epochs)
 
+start_time = time.time()
 for epoch in range(args.epochs):
     total_loss = 0.0  # Initialize loss for reporting
 
@@ -191,7 +225,7 @@ for epoch in range(args.epochs):
     LOSS[epoch] = total_loss
 
     # Print training loss for this epoch
-    print(f"Epoch: {epoch + 1} \t||\t Training Loss: {LOSS[epoch]}")
+    print(f"Epoch: {epoch + 1} \t||\t Training Loss: {LOSS[epoch]} \t||\t Elapsed Time: {time.time()-start_time}")
 
 # Plot training loss
 plt.figure(figsize=(10, 6))
@@ -200,15 +234,14 @@ plt.title('Training Loss vs. Epochs')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.grid(True)
-plt.legend()
-plt.show()
+plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
+plt.savefig('loss')
 
 # Plot some example predictions vs true values
-n_example = 5  # Number of example trajectories to plot
 
 plt.figure(figsize=(10, 6))
 for n in range(min(n_example, openloop_data_in.shape[0])):
-    true_values = openloop_data_out[n, :, :].numpy()  # True output (shape: T, 4)
+    true_values = openloop_data_out[n, :, :].detach().cpu().numpy()  # True output (shape: T, 4)
     predicted_values = np.zeros_like(true_values)
 
     G0.reset()  # Reset model for the trajectory
@@ -216,7 +249,7 @@ for n in range(min(n_example, openloop_data_in.shape[0])):
         u = openloop_data_in[n, t, :].unsqueeze(0)  # Input for time t
         u = u.unsqueeze(1)  # Shape (1, 1, 2)
         y_hat = G0(u)  # Forward pass
-        predicted_values[t, :] = y_hat.squeeze().detach().numpy()
+        predicted_values[t, :] = y_hat.squeeze().detach().cpu().numpy()
 
     # Plot true vs predicted for each example
     plt.subplot(min(n_example, 5), 1, n + 1)
@@ -225,12 +258,12 @@ for n in range(min(n_example, openloop_data_in.shape[0])):
     plt.title(f'Example {n + 1}')
     plt.xlabel('Time Steps')
     plt.ylabel('Output Value')
-    plt.legend()
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05))
     plt.grid(True)
 
 plt.tight_layout()
-plt.show()
-
+plt.savefig('G0_trained')
+exit()
 #--------- primal step dataset------------
 train_data_full = sys.generate_output_noise(num_samples = args.num_rollouts, horizon = args.horizon, noise_only_on_init=True, output_noise_std=0.1)
 test_data = sys.generate_input_noise(num_samples = args.num_rollouts, horizon = args.horizon, noise_only_on_init=True, input_noise_std=0.1)
@@ -352,7 +385,7 @@ plot_traj_vs_time(args.horizon, sys.n_agents, x_log[0, :args.horizon, :], u_log[
 # ---- Closed-loop data collection-----
 dataset = RobotsDataset(random_seed=args.random_seed, horizon=args.horizon, std_noise=args.std_noise, n_agents=1)
 # divide to train and test
-train_data_x, train_data_u = dataset.generate_closedloop_dataset(sys=sys, controller=ctl, noise_only_on_init=True, num_signals=50, ts=0.05)
+train_data_x, train_data_u = dataset.generate_closedloop_dataset(sys=sys, controller=ctl, noise_only_on_init=True, num_samples=50, ts=0.05)
 
 #-------------Dual step: learn G1 from closed-loop data-----------------
 

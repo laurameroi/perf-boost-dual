@@ -37,7 +37,7 @@ logger.info(msg)
 torch.manual_seed(args.random_seed)
 
 # ------------ 1. Plant ------------
-num_signals=50
+num_samples=50
 dataset = RobotsDataset(random_seed=args.random_seed, horizon=args.horizon, std_noise=args.std_noise, n_agents=1)
 
 plant_input_init = None     # all zero
@@ -50,11 +50,11 @@ sys = RobotsSystem(x_target=dataset.x_target,
 
 # ------------ Open loop data collection ------------
 openloop_data_out, openloop_data_in = dataset.generate_openloop_dataset(
-    num_signals=num_signals, ts=0.05, noise_only_on_init=True, sys=sys
+    num_samples=num_samples, ts=0.05, noise_only_on_init=True, sys=sys
 )
 
 fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-for n in range(num_signals):
+for n in range(num_samples):
     axs[0].plot(openloop_data_out[n, :, 0].detach().cpu().numpy())
     axs[1].plot(openloop_data_in[n, :, 0].detach().cpu().numpy())  
 plt.savefig('foo.png')
@@ -78,7 +78,7 @@ loss_fn = torch.nn.MSELoss()
 
 for epoch in range(args.epochs):
     optimizer.zero_grad()
-    x_log = G0.openloop_rollout(u=openloop_data_in, noise=None, train=True)
+    x_log = G0.openloop_rollout(u=openloop_data_in, output_noise=None, train=True)
     loss = loss_fn(x_log, openloop_data_out)
     loss.backward()
     optimizer.step()

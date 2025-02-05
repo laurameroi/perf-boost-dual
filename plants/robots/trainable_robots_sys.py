@@ -28,15 +28,15 @@ class TrainableRobotsSystem(RobotsSystem):
         self.register_buffer('x_target', x_target.reshape(1, -1))  # shape = (1, state_dim)
         x_init = self.x_target.detach().clone() if x_init is None else x_init.reshape(1, -1)   # shape = (1, state_dim)
         self.register_buffer('x_init', x_init)
-        u_init = torch.zeros(1, int(self.x_target.shape[1]/2)) if u_init is None else u_init.reshape(1, -1)   # shape = (1, in_dim)
+        u_init = torch.zeros(1, int(self.x_target.shape[1]/2)) if u_init is None else u_init.reshape(1, -1)   # shape = (1, input_dim)
         self.register_buffer('u_init', u_init)
         # check dimensions
         self.n_agents = int(self.x_target.shape[1]/4)
         self.state_dim = 4*self.n_agents
-        self.in_dim = 2*self.n_agents
+        self.input_dim = 2*self.n_agents
         self.output_dim = self.state_dim #TODO
         assert self.x_target.shape[1] == self.state_dim and self.x_init.shape[1] == self.state_dim
-        assert self.u_init.shape[1] == self.in_dim
+        assert self.u_init.shape[1] == self.input_dim
 
         if self.linear_plant:
             assert init_b2 is None
@@ -56,7 +56,7 @@ class TrainableRobotsSystem(RobotsSystem):
 
         Args:
             - x (torch.Tensor): plant's state at t. shape = (batch_size, 1, state_dim)
-            - u (torch.Tensor): plant's input at t. shape = (batch_size, 1, in_dim)
+            - u (torch.Tensor): plant's input at t. shape = (batch_size, 1, input_dim)
 
         Returns:
             next state of the noise-free dynamics.
@@ -85,7 +85,7 @@ class TrainableRobotsSystem(RobotsSystem):
         A_lin = A_lin.to(x.device)
 
         x = x.view(-1, 1, self.state_dim)
-        u = u.view(-1, 1, self.in_dim)
+        u = u.view(-1, 1, self.input_dim)
         if self.linear_plant:
             # x is batched but A is not => can use F.linear to compute xA^T
             f = F.linear(x - self.x_target, A_lin) + F.linear(u, B) + self.x_target

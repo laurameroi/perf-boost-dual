@@ -27,14 +27,14 @@ class ContractiveREN(nn.Module):
     """
 
     def __init__(
-        self, dim_in: int, dim_out: int, dim_internal: int,
+        self, input_dim: int, output_dim: int, dim_internal: int,
         dim_nl: int, internal_state_init = None, initialization_std: float = 0.5,
         pos_def_tol: float = 0.001, contraction_rate_lb: float = 1.0, y_init = None, linear_output=True, device="cuda:0" if torch.cuda.is_available() else "cpu"
     ):
         """
         Args:
-            dim_in (int): Input (u) dimension.
-            dim_out (int): Output (y) dimension.
+            input_dim (int): Input (u) dimension.
+            output_dim (int): Output (y) dimension.
             dim_internal (int): Internal state (x) dimension. This state evolves with contraction properties.
             dim_nl (int): Dimension of the input ("v") and ouput ("w") of the nonlinear static block.
             initialization_std (float, optional): Weight initialization. Set to 0.1 by default.
@@ -45,8 +45,8 @@ class ContractiveREN(nn.Module):
         super().__init__()
 
         # set dimensions
-        self.dim_in = dim_in
-        self.dim_out = dim_out
+        self.input_dim = input_dim
+        self.output_dim = output_dim
         self.dim_internal = dim_internal
         self.dim_nl = dim_nl
         self.device = device
@@ -64,13 +64,13 @@ class ContractiveREN(nn.Module):
         self.X_shape = (2 * self.dim_internal + self.dim_nl, 2 * self.dim_internal + self.dim_nl)
         self.Y_shape = (self.dim_internal, self.dim_internal)
         # nn state dynamics
-        self.B2_shape = (self.dim_internal, self.dim_in)
+        self.B2_shape = (self.dim_internal, self.input_dim)
         # nn output
-        self.C2_shape = (self.dim_out, self.dim_internal)
-        self.D21_shape = (self.dim_out, self.dim_nl)
-        self.D22_shape = (self.dim_out, self.dim_in)
+        self.C2_shape = (self.output_dim, self.dim_internal)
+        self.D21_shape = (self.output_dim, self.dim_nl)
+        self.D22_shape = (self.output_dim, self.input_dim)
         # v signal
-        self.D12_shape = (self.dim_nl, self.dim_in)
+        self.D12_shape = (self.dim_nl, self.input_dim)
 
         # define trainable params
         self.training_param_names = ['X', 'Y', 'B2', 'C2', 'D21', 'D22', 'D12']
@@ -95,11 +95,12 @@ class ContractiveREN(nn.Module):
                 self.x = torch.zeros(1, 1, self.dim_internal)
             else:
                 y_init = y_init.reshape(1, -1)
-                self.x = torch.linalg.lstsq(self.C2, y_init.squeeze(1).T)[0].T.unsqueeze(1)
+                self.x = torch.linalg.lstsq(self.C2, y_init.to(self.C2.device).squeeze(1).T)[0].T.unsqueeze(1)
         else:
             assert isinstance(internal_state_init, torch.Tensor)
             self.x = internal_state_init.reshape(1, 1, self.dim_internal)
         self.register_buffer('init_x', self.x.detach().clone())
+        print('Contractive REN', self.init_x, y_init)
 
     def _update_model_param(self):
         """
@@ -131,10 +132,10 @@ class ContractiveREN(nn.Module):
         Forward pass of REN.
 
         Args:
-            u_in (torch.Tensor): Input with the size of (batch_size, 1, self.dim_in).
+            u_in (torch.Tensor): Input with the size of (batch_size, 1, self.input_dim).
 
         Return:
-            y_out (torch.Tensor): Output with (batch_size, 1, self.dim_out).
+            y_out (torch.Tensor): Output with (batch_size, 1, self.output_dim).
         """
         # update non-trainable model params
         self._update_model_param()

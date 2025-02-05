@@ -43,7 +43,7 @@ class RobotsLoss(LQLossFH):
 
         Args:
             - xs: tensor of shape (S, T, state_dim)
-            - us: tensor of shape (S, T, in_dim)
+            - us: tensor of shape (S, T, input_dim)
 
         Return:
             - loss of shape (1, 1).
