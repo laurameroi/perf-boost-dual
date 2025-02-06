@@ -57,15 +57,15 @@ else:
 # data for plots
 t_ext = args.horizon * 4
 plot_data = torch.zeros(1, t_ext, train_data.shape[-1], device=device)
-plot_data[:, 0, :] = (dataset.x0.detach() - dataset.xbar)
+plot_data[:, 0, :] = (dataset.x0.detach() - dataset.ybar)
 plot_data = plot_data.to(device)
 # batch the data
 train_dataloader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
 
 # ------------ 2. Plant ------------
 plant_input_init = None     # all zero
-plant_state_init = None     # same as xbar
-sys = RobotsSystem(xbar=dataset.xbar,
+plant_state_init = None     # same as ybar
+sys = RobotsSystem(ybar=dataset.ybar,
                    x_init=plant_state_init,
                    u_init=plant_input_init,
                    linear_plant=args.linearize_plant,
@@ -89,7 +89,7 @@ x_log, _, u_log = sys.rollout(ctl, plot_data)
 filename = os.path.join(save_folder, 'CL_init.pdf')
 plot_trajectories(
     x_log[0, :, :],  # remove extra dim due to batching
-    dataset.xbar, sys.n_agents, filename=filename, text="CL - before training", T=t_ext
+    dataset.ybar, sys.n_agents, filename=filename, text="CL - before training", T=t_ext
 )
 plot_traj_vs_time(args.horizon, sys.n_agents, x_log[0, :args.horizon, :], u_log[0, :args.horizon, :], save=False)
 total_n_params = sum(p.numel() for p in ctl.parameters() if p.requires_grad)
@@ -98,7 +98,7 @@ logger.info("[INFO] Number of parameters: %i" % total_n_params)
 # ------------ 4. Loss ------------
 Q = torch.kron(torch.eye(args.n_agents), torch.eye(4)).to(device)   # TODO: move to args and print info
 loss_fn = RobotsLoss(
-    Q=Q, alpha_u=args.alpha_u, xbar=dataset.xbar,
+    Q=Q, alpha_u=args.alpha_u, ybar=dataset.ybar,
     loss_bound=None, sat_bound=None,
     alpha_col=args.alpha_col, alpha_obst=args.alpha_obst,
     min_dist=args.min_dist if args.col_av else None,
@@ -126,7 +126,7 @@ logger.info('[INFO] saved trained model.')
 logger.info('\n[INFO] evaluating the trained controller on %i training rollouts.' % train_data.shape[0])
 with torch.no_grad():
     x_log, _, u_log = sys.rollout(
-        controller=ctl, data=train_data, train=False,
+        controller=ctl, output_noise_data=train_data, train=False,
     )   # use the entire train data, not a batch
     # evaluate losses
     loss = loss_fn.forward(x_log, u_log)
@@ -142,7 +142,7 @@ logger.info('\n[INFO] evaluating the trained controller on %i test rollouts.' % 
 with torch.no_grad():
     # simulate over horizon steps
     x_log, _, u_log = sys.rollout(
-        controller=ctl, data=test_data, train=False,
+        controller=ctl, output_noise_data=test_data, train=False,
     )
     # loss
     test_loss = loss_fn.forward(x_log, u_log).item()
@@ -159,7 +159,7 @@ x_log, _, u_log = sys.rollout(ctl, plot_data)
 filename = os.path.join(save_folder, 'CL_trained.pdf')
 plot_trajectories(
     x_log[0, :, :],  # remove extra dim due to batching
-    dataset.xbar, sys.n_agents, filename=filename, text="CL - trained controller", T=t_ext,
+    dataset.ybar, sys.n_agents, filename=filename, text="CL - trained controller", T=t_ext,
     obstacle_centers=loss_fn.obstacle_centers,
     obstacle_covs=loss_fn.obstacle_covs
 )

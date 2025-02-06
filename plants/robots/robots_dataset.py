@@ -17,12 +17,12 @@ class RobotsDataset(CostumDataset):
             self.x_init = torch.tensor([2., -2, 0, 0,
                                     -2, -2, 0, 0,
                                     ])
-            self.x_target = torch.tensor([-2, 2, 0, 0,
-                                    2., 2, 0, 0,
+            self.y_target = torch.tensor([-2, 2, 
+                                    2., 2, 
                                     ])
         elif n_agents==1:
             self.x_init = torch.tensor([2., -2, 0, 0])
-            self.x_target = torch.tensor([0, 0, 0, 0])  #TODO
+            self.y_target = torch.tensor([0, 0])  #TODO
         else:
             raise ValueError('n_agents must be 1 or 2')
 
@@ -43,7 +43,7 @@ class RobotsDataset(CostumDataset):
         assert ref_data.shape==input_noise.shape
         ref_data_noisy = ref_data + input_noise
 
-        output_data_noisy = sys.openloop_rollout(ref_data_noisy, output_noise=output_noise)
+        output_data_noisy = sys.openloop_rollout(u=ref_data_noisy, output_noise=output_noise)
         assert output_data_noisy.shape == output_noise.shape
 
         return output_data_noisy, ref_data_noisy
@@ -51,14 +51,23 @@ class RobotsDataset(CostumDataset):
     #CLOSED LOOP data generation of dimension num_samples
     def generate_closedloop_dataset(self, sys, controller, noise_only_on_init, num_samples=50, ts=0.05):
         device = sys.x_init.device
-        # generate noise
-        data = self._generate_data(num_samples, noise_only_on_init=noise_only_on_init)
-        x_log,_, u_log =sys.rollout(controller, data)
+        
+        # generate noise on plant input and output
+        input_noise = sys.generate_input_noise(num_samples=num_samples, horizon=self.horizon, noise_only_on_init=noise_only_on_init)
+        output_noise = sys.generate_output_noise(num_samples=num_samples, horizon=self.horizon, noise_only_on_init=noise_only_on_init)
+        input_noise, output_noise = input_noise.to(device), output_noise.to(device)
 
-        x_log, u_log = x_log.to(device), u_log.to(device)
+        # PE reference used as input to sys, each is a 2D sinusoidal signal
+        ref_data = generate_sinusoidal_dataset(num_samples=num_samples, ts=ts, horizon=self.horizon, input_dim=sys.input_dim)
+        ref_data = ref_data.to(device)
+        assert ref_data.shape==input_noise.shape
+        ref_data_noisy = ref_data + input_noise
 
-        return x_log, u_log
+        output_data_noisy = controller.rollout(sys=sys, ref=ref_data_noisy, output_noise=output_noise)
+        assert output_data_noisy.shape == output_noise.shape
 
+        return output_data_noisy, ref_data_noisy
+    
 # Define a function to generate the sinusoidal signals for horizontal and vertical forces
 def generate_sinusoidal(frequency, amplitude, phase, time):
     return amplitude * np.sin(2 * np.pi * frequency * time + phase)

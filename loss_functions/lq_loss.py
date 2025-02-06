@@ -5,7 +5,7 @@ from config import device
 
 
 class LQLossFH():
-    def __init__(self, Q, R, loss_bound=None, sat_bound=None, xbar=None):
+    def __init__(self, Q, R, loss_bound=None, sat_bound=None, ybar=None):
         self.Q, self.R = Q, R
         self.Q = to_tensor(self.Q).to(device)
         self.R = to_tensor(self.R)
@@ -20,28 +20,28 @@ class LQLossFH():
         if self.sat_bound is not None:
             assert self.loss_bound is not None
             self.sat_bound = to_tensor(self.sat_bound)
-        self.xbar = xbar
-        if self.xbar is not None:
-            self.xbar = to_tensor(self.xbar).to(device)
-            self.xbar = self.xbar.reshape(self.Q.shape[0], 1)
+        self.ybar = ybar
+        if self.ybar is not None:
+            self.ybar = to_tensor(self.ybar).to(device)
+            self.ybar = self.ybar.reshape(self.Q.shape[0], 1)
 
-    def forward(self, xs, us):
+    def forward(self, ys, us):
         """
         compute loss
         Args:
             - xs: tensor of shape (S, T, state_dim)
             - us: tensor of shape (S, T, input_dim)
         """
-        if self.xbar is not None:
-            xs = xs - self.xbar.repeat(xs.shape[0], 1, 1)
+        if self.ybar is not None:
+            ys = ys - self.ybar.repeat(ys.shape[0], 1, 1)
         # batch
-        xs = xs.reshape(*xs.shape, 1)
+        ys = ys.reshape(*ys.shape, 1)
         us = us.reshape(*us.shape, 1)
         # batched multiplication
-        xTQx = torch.matmul(torch.matmul(xs.transpose(-1, -2), self.Q), xs)         # shape = (S, T, 1, 1)
+        xTQx = torch.matmul(torch.matmul(ys.transpose(-1, -2), self.Q), ys)         # shape = (S, T, 1, 1)
         uTRu = torch.matmul(torch.matmul(us.transpose(-1, -2), self.R), us)         # shape = (S, T, 1, 1)
         # average over the time horizon
-        loss_x = torch.sum(xTQx, 1) / xs.shape[1]    # shape = (S, 1, 1)
+        loss_x = torch.sum(xTQx, 1) / ys.shape[1]    # shape = (S, 1, 1)
         loss_u = torch.sum(uTRu, 1) / us.shape[1]    # shape = (S, 1, 1)
         loss_val = loss_x + loss_u
         # bound
@@ -50,5 +50,5 @@ class LQLossFH():
         if self.loss_bound is not None:
             loss_val = self.loss_bound * loss_val           # shape = (S, 1, 1)
         # average over the samples
-        loss_val = torch.sum(loss_val, 0)/xs.shape[0]       # shape = (1, 1)
+        loss_val = torch.sum(loss_val, 0)/ys.shape[0]       # shape = (1, 1)
         return loss_val

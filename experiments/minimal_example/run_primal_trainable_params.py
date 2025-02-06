@@ -115,7 +115,7 @@ logger.info("[INFO] Number of parameters: %i" % total_n_params)
 # ------------ 4. Loss ------------
 Q = torch.kron(torch.eye(args.n_agents), torch.eye(4)).to(device)   # TODO: move to args and print info
 loss_fn = RobotsLoss(
-    Q=Q, alpha_u=args.alpha_u, xbar=dataset.x_target,
+    Q=Q, alpha_u=args.alpha_u, ybar=dataset.x_target,
     loss_bound=None, sat_bound=None,
     alpha_col=args.alpha_col, alpha_obst=args.alpha_obst,
     min_dist=args.min_dist if args.col_av else None,
@@ -143,7 +143,7 @@ logger.info('[INFO] saved trained model.')
 logger.info('\n[INFO] evaluating the trained controller on %i training rollouts.' % train_data.shape[0])
 with torch.no_grad():
     x_log, _, u_log = sys.rollout(
-        controller=ctl, data=train_data, train=False,
+        controller=ctl, output_noise_data=train_data, train=False,
     )   # use the entire train data, not a batch
     # evaluate losses
     loss = loss_fn.forward(x_log, u_log)
@@ -159,7 +159,7 @@ logger.info('\n[INFO] evaluating the trained controller on %i test rollouts.' % 
 with torch.no_grad():
     # simulate over horizon steps
     x_log, _, u_log = sys.rollout(
-        controller=ctl, data=test_data, train=False,
+        controller=ctl, output_noise_data=test_data, train=False,
     )
     # loss
     test_loss = loss_fn.forward(x_log, u_log).item()

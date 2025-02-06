@@ -3,14 +3,14 @@ import torch.nn.functional as F
 
 
 class RobotsSystem(torch.nn.Module):
-    def __init__(self, input_noise_std, output_noise_std, x_target: torch.Tensor, linear_plant: bool, x_init, u_init=None, k: float=1.0):
+    def __init__(self, input_noise_std, output_noise_std, y_target: torch.Tensor, linear_plant: bool, x_init, u_init=None, k: float=1.0):
         """
 
         Args:
-            x_target: concatenated target point of all agents
+            y_target: concatenated target point of all agents
             linear_plant: if True, a linearized model of the system is used.
                              O.w., the model is non-lineardue to the dependence of friction on the speed.
-            x_init: concatenated initial point of all agents. Defaults to x_target when None.
+            x_init: concatenated initial point of all agents. Defaults to y_target when None.
             u_init: initial input to the plant. Defaults to zero when None.
             k (float): gain of the pre-stabilizing controller (acts as a spring constant).
         """
@@ -22,20 +22,22 @@ class RobotsSystem(torch.nn.Module):
         self.linear_plant = linear_plant
         self.tanh_nonlinearity = False
 
-        # initial state
-        self.register_buffer('x_target', x_target.reshape(1, -1))  # shape = (1, state_dim)
-        x_init = x_init.reshape(1, -1)   # shape = (1, state_dim)
-        self.register_buffer('x_init', x_init)
-        u_init = torch.zeros(1, int(self.x_target.shape[1]/2)) if u_init is None else u_init.reshape(1, -1)   # shape = (1, input_dim)
-        self.register_buffer('u_init', u_init)
-
         # check dimensions
-        self.n_agents = int(self.x_target.shape[1]/4)
+        self.register_buffer('y_target', y_target.reshape(1, -1))  # shape = (1, output_dim)
+        self.register_buffer(
+            'x_target', 
+            torch.tensor([self.y_target[0,0], self.y_target[0,1], 0, 0]).reshape(1, -1)
+        )  # shape = (1, state_dim)
+        self.n_agents = int(self.y_target.shape[1]/2)
         self.state_dim = 4*self.n_agents
         self.input_dim = 2*self.n_agents
-        self.output_dim = int(self.state_dim/2) #TODO
-        assert self.x_target.shape[1] == self.state_dim and self.x_init.shape[1] == self.state_dim
-        assert self.u_init.shape[1] == self.input_dim
+        self.output_dim = 2*self.n_agents
+
+        # initial state
+        x_init = x_init.reshape(1, self.state_dim)   # shape = (1, state_dim)
+        self.register_buffer('x_init', x_init)
+        u_init = torch.zeros(1, self.input_dim) if u_init is None else u_init.reshape(1, self.input_dim)   # shape = (1, input_dim)
+        self.register_buffer('u_init', u_init)
 
         self.register_buffer('x', self.x_init.detach().clone())
 
@@ -93,6 +95,9 @@ class RobotsSystem(torch.nn.Module):
         A = self.A_lin + self.h * A3
         return A    # shape = (batch_size, 4 * n_agents, 4 * n_agents)
 
+    def reset(self):
+        self.x = self.x_init.detach().clone().reshape(1, 1, self.state_dim)
+
     def noiseless_forward(self, t, u: torch.Tensor):
         """
         forward of the plant without the process noise.
@@ -123,60 +128,72 @@ class RobotsSystem(torch.nn.Module):
         self.x = x_next
         return y    # shape = (batch_size, 1, output_dim)
 
-    def forward(self, t, u, w):
+    def forward(self, u, t=None, output_noise=None):
         """
         forward of the plant with the process noise.
 
         Args:
             - x (torch.Tensor): plant's state at t. shape = (batch_size, 1, state_dim)
             - u (torch.Tensor): plant's input at t. shape = (batch_size, 1, input_dim)
-            - w (torch.Tensor): process noise at t. shape = (batch_size, 1, state_dim)
+            - w (torch.Tensor): output noise at t. shape = (batch_size, 1, state_dim)
 
         Returns:
             noisy output of the plant at time t
         """
-        return self.noiseless_forward(t, u) + w.view(-1, 1, self.output_dim)
+        if len(u.shape)==2:
+            u = u.reshape(1, *u.shape)
+        if output_noise is None: 
+            output_noise = torch.zeros(*u.shape[0:2], self.output_dim, device=u.device)
+        return self.noiseless_forward(t, u) + output_noise.view(-1, 1, self.output_dim)
 
     # simulation
-    def rollout(self, controller, data, train=False):
-        """
-        rollout REN for rollouts of the process noise
+    def rollout(self, controller, output_noise_data, ref=None, train=False):
+        return controller.rollout(sys=self, output_noise_data=output_noise_data, ref=ref, train=train)
+    
+    # def rollout(self, controller, output_noise_data, ref=None, train=False):
+    #     """
+    #     rollout REN for rollouts of the process noise
 
-        Args:
-            - data: sequence of disturbance samples of shape
-                (batch_size, T, state_dim).
+    #     Args:
+    #         - data: sequence of disturbance samples of shape
+    #             (batch_size, T, output_dim).
 
-        Rerurn:
-            - x_log of shape = (batch_size, T, state_dim)
-            - u_log of shape = (batch_size, T, input_dim)
-        """
+    #     Rerurn:
+    #         - y_log of shape = (batch_size, T, output_dim)
+    #         - u_log of shape = (batch_size, T, input_dim)
+    #     """
+    #     if ref is None:
+    #         ref = torch.zeros(*output_noise_data.shape[0:2], self.input_dim, device=self.x_init.device)
+    #     # init
+    #     controller.reset()
+    #     self.x = self.x_init.detach().clone().repeat(output_noise_data.shape[0], 1, 1) #+noise on initial conditions?
+    #     u = self.u_init.detach().clone().repeat(output_noise_data.shape[0], 1, 1) #apply pb also at t=0 on initial conditions mismatch?
+    #     # print('u', u.shape, 'ref0 ', ref[:, 0:1, :].shape)
+    #     u += ref[:, 0:1, :]
+        
+    #     # Simulate
+    #     for t in range(output_noise_data.shape[1]):
+    #         y = self.forward(t=t, u=u, output_noise=output_noise_data[:, t:t+1, :]) # y_t, x_{t+1} gets stored in self.x
 
-        # init
-        controller.reset()
-        self.x = self.x_init.detach().clone().repeat(data.shape[0], 1, 1) #+noise on initial conditions?
-        u = self.u_init.detach().clone().repeat(data.shape[0], 1, 1) #apply pb also at t=0 on initial conditions mismatch?
+    #         if t == 0:
+    #             y_log, u_log = y, u
+    #         else:
+    #             y_log = torch.cat((y_log, y), 1)
+    #             u_log = torch.cat((u_log, u), 1)
 
-        # Simulate
-        for t in range(data.shape[1]):
-            y = self.forward(t=t, u=u, w=data[:, t:t+1, :]) # y_t, x_{t+1} gets stored in self.x
-            u = controller(y)                               # u_{t+1} shape = (batch_size, 1, input_dim)
+    #         if not t == output_noise_data.shape[1]-1:
+    #             u = controller(y)+ref[:, t:t+1, :] # u_{t+1} shape = (batch_size, 1, input_dim)
 
-            if t == 0:
-                y_log, u_log = y, u
-            else:
-                y_log = torch.cat((y_log, y), 1)
-                u_log = torch.cat((u_log, u), 1)
+    #     controller.reset()
+    #     if not train:
+    #         y_log, u_log = y_log.detach(), u_log.detach()
 
-        controller.reset()
-        if not train:
-            y_log, u_log = y_log.detach(), u_log.detach()
-
-        return y_log, None, u_log
+    #     return y_log, None, u_log
 
 
 
     # simulation
-    def openloop_rollout(self, u, output_noise=None, train=False):
+    def openloop_rollout(self, u=None, output_noise=None, train=False):
         """
         rollout REN for rollouts of the process noise
 
@@ -184,13 +201,16 @@ class RobotsSystem(torch.nn.Module):
             - u: sequence of inputs of shape
                 (batch_size, T, input_dim).
             - noise: sequence of disturbance samples of shape
-                (batch_size, T, state_dim).
+                (batch_size, T, state_dim).openloop_rollout
 
         Rerurn:
             - y_log of shape = (batch_size, T, output_dim)
         """
+        assert not (u is None and output_noise is None), 'at least one of u or output_noise should not be None'
+        if u is None: 
+            u = torch.zeros(*output_noise.shape[0:2], self.input_dim, device=output_noise.device)
         if output_noise is None:
-            output_noise = torch.zeros(u.shape[0], u.shape[1], self.output_dim)
+            output_noise = torch.zeros(*u.shape[0:2], self.output_dim, device=u.device)
         # init
         self.x = self.x_init.detach().clone()
         assert output_noise.shape[0]==u.shape[0] and output_noise.shape[1]==u.shape[1]
@@ -199,7 +219,7 @@ class RobotsSystem(torch.nn.Module):
 
         # Simulate
         for t in range(output_noise.shape[1]):
-            y = self.forward(t=t, u=u[:, t:t+1, :], w=output_noise[:, t:t+1, :])    # y_t. x_{t+1} gets updated. shape = (batch_size, 1, output_dim)                                     # shape = (batch_size, 1, input_dim)f t == 0:
+            y = self.forward(t=t, u=u[:, t:t+1, :], output_noise=output_noise[:, t:t+1, :])    # y_t. x_{t+1} gets updated. shape = (batch_size, 1, output_dim)                                     # shape = (batch_size, 1, input_dim)f t == 0:
             if t==0:
                 y_log = y
             else:

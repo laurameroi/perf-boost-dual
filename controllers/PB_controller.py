@@ -62,6 +62,13 @@ class PerfBoostController(nn.Module):
         self.input_dim = self.input_init.shape[-1]
         self.output_dim = self.output_init.shape[-1]
 
+        # define the system dynamics without process noise
+        self.internal_model = internal_model
+        # freeze parameters of the internal model
+        for p in self.internal_model.parameters():
+            p.requires_grad = False
+
+
         # set type of nn for emme
         self.nn_type = nn_type
         # define Emme as REN or SSM
@@ -84,9 +91,6 @@ class PerfBoostController(nn.Module):
         else:
             raise ValueError("Model for emme not implemented")
 
-        # define the system dynamics without process noise
-        self.internal_model = internal_model
-
         # Internal variables
         self.t = None
         self.last_input = None
@@ -102,6 +106,7 @@ class PerfBoostController(nn.Module):
         self.last_input = self.input_init.detach().clone()
         self.last_output = self.output_init.detach().clone()
         self.emme.reset()  # reset emme states to the initial value
+        self.internal_model.reset()
 
     def forward(self, input_t: torch.Tensor):
         """
@@ -114,8 +119,8 @@ class PerfBoostController(nn.Module):
         Return:
             y_out (torch.Tensor): Output with (batch_size, 1, self.output_dim).
         """
-
         # apply noiseless forward to get noise less input (noise less state of the plant)
+        # with torch.no_grad():
         u_noiseless = self.internal_model.forward(
             u=self.last_output  # last output of the controller is the last input to the plant
         )  # shape = (self.batch_size, 1, self.input_dim)
@@ -125,7 +130,6 @@ class PerfBoostController(nn.Module):
         # apply REN or SSM
         output = self.emme.forward(w_)
         output = output * self.output_amplification  # shape = (self.batch_size, 1, self.output_dim)
-
         # update internal states
         self.last_input, self.last_output = input_t, output
         self.t += 1
@@ -199,7 +203,7 @@ class PerfBoostController(nn.Module):
         log_epoch, logger, return_best, early_stopping, n_logs_no_change=None, tol_percentage=None
     ):
         logger.info('\n------------ Begin training ------------')
-    
+
         # Set up optimizer
         optimizer = torch.optim.Adam(self.parameters(), lr=lr)
 
@@ -223,9 +227,9 @@ class PerfBoostController(nn.Module):
                 for train_data_batch in train_dataloader:
                     optimizer.zero_grad()
                     # Simulate over horizon steps
-                    x_log, _, u_log = sys.rollout(controller=self, data=train_data_batch, train=True)
+                    y_log, _, u_log = sys.rollout(controller=self, output_noise_data=train_data_batch, train=True)
                     # Calculate loss of all rollouts in the batch
-                    loss = loss_fn(x_log, u_log)
+                    loss = loss_fn(y_log, u_log)
                     train_loss_batch += loss.item()
                     # Backpropagation and optimization step
                     loss.backward()
@@ -237,9 +241,9 @@ class PerfBoostController(nn.Module):
                     if return_best or early_stopping:
                         # Rollout the current controller on the validation data
                         with torch.no_grad():
-                            x_log_valid, _, u_log_valid = sys.rollout(controller=self, data=valid_data, train=False)
+                            y_log_valid, _, u_log_valid = sys.rollout(controller=self, output_noise_data=valid_data, train=False)
                             # Calculate validation loss
-                            loss_valid = loss_fn(x_log_valid, u_log_valid)
+                            loss_valid = loss_fn(y_log_valid, u_log_valid)
                         msg += f' ---||--- validation loss: {loss_valid.item():.2f}'
                         # Compare with the best validation loss
                         imp = 100 * (best_valid_loss-loss_valid.item())/best_valid_loss # Valid loss improvement
@@ -269,3 +273,45 @@ class PerfBoostController(nn.Module):
         # Set to best seen parameters during training
         if return_best:
             self.load_state_dict(best_params)
+
+
+    def rollout(self, sys, output_noise_data, input_noise_data=None, ref=None, train=False):
+        """
+        rollout PB for rollouts of the process noise
+
+        Args:
+            - data: sequence of disturbance samples of shape
+                (batch_size, T, output_dim).
+
+        Rerurn:
+            - y_log of shape = (batch_size, T, output_dim)
+            - u_log of shape = (batch_size, T, input_dim)
+        """
+        if ref is None:
+            ref = torch.zeros(*output_noise_data.shape[0:2], sys.input_dim, device=sys.x_init.device)
+        if input_noise_data is None:
+            input_noise_data = torch.zeros(*output_noise_data.shape[0:2], sys.input_dim, device=sys.x_init.device)
+        # init
+        self.reset()
+        sys.x = sys.x_init.detach().clone().repeat(output_noise_data.shape[0], 1, 1) #+noise on initial conditions?
+        u = sys.u_init.detach().clone().repeat(output_noise_data.shape[0], 1, 1) #apply pb also at t=0 on initial conditions mismatch?
+        u += ref[:, 0:1, :] + input_noise_data[:, 0:1, :]
+        
+        # Simulate
+        for t in range(output_noise_data.shape[1]):
+            y = sys.forward(t=t, u=u, output_noise=output_noise_data[:, t:t+1, :]) # y_t, x_{t+1} gets stored in sys.x
+            if t == 0:
+                y_log, u_log = y, u
+            else:
+                y_log = torch.cat((y_log, y), 1)
+                u_log = torch.cat((u_log, u), 1)
+
+            # compute u for the next time step
+            if not t == output_noise_data.shape[1]-1:
+                u = self(y)+ref[:, t+1:t+2, :] + input_noise_data[:, t+1:t+2, :] # u_{t+1} shape = (batch_size, 1, input_dim)
+
+        self.reset()
+        if not train:
+            y_log, u_log = y_log.detach(), u_log.detach()
+
+        return y_log, None, u_log

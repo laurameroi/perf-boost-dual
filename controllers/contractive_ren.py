@@ -138,6 +138,11 @@ class ContractiveREN(nn.Module):
         """
         # update non-trainable model params
         self._update_model_param()
+        assert u.shape[-1]==self.input_dim
+        if len(u.shape)==2:
+            u = u.reshape(1, *u.shape)
+        elif len(u.shape)>3:
+            raise AssertionError(msg='u must be 2 or 3D, of shape (batch_size, horizon, dim)')
 
         batch_size = u.shape[0]
 
