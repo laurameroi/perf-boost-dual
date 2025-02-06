@@ -155,33 +155,37 @@ plt.grid(True)
 
 plt.tight_layout()
 plt.savefig('G0_trained')
-exit()
+
 
 #--------- primal step dataset------------
-train_data_full = sys.generate_output_noise(num_samples = args.num_rollouts, horizon = args.horizon, noise_only_on_init=True, output_noise_std=0.1)
-test_data = sys.generate_input_noise(num_samples = args.num_rollouts, horizon = args.horizon, noise_only_on_init=True, input_noise_std=0.1)
-train_data_full, test_data = train_data_full.to(device), test_data.to(device)
+# TODO: train and valid division
+num_init_conditions = 10
+std_init_conditions = 0.2
+init_conditions_train_full = sys.x_init.repeat(num_init_conditions, 1, 1) + std_init_conditions * torch.randn(num_init_conditions, 1, sys.state_dim, device=sys.x_init.device)
+init_conditions_test = sys.x_init.repeat(100, 1, 1) + std_init_conditions * torch.randn(100, 1, sys.state_dim, device=sys.x_init.device)
+
 # validation data
 if args.early_stopping or args.return_best:
-    valid_inds = torch.randperm(train_data_full.shape[0])[:int(args.validation_frac*train_data_full.shape[0])]
-    train_inds = [ind for ind in range(train_data_full.shape[0]) if ind not in valid_inds]
-    valid_data = train_data_full[valid_inds, :, :]
-    train_data = train_data_full[train_inds, :, :]
+    valid_inds = torch.randperm(init_conditions_train_full.shape[0])[:int(args.validation_frac*init_conditions_train_full.shape[0])]
+    train_inds = [ind for ind in range(init_conditions_train_full.shape[0]) if ind not in valid_inds]
+    init_conditions_valid = init_conditions_train_full[valid_inds, :, :]
+    init_conditions_train = init_conditions_train_full[train_inds, :, :]
 else:
-    valid_data = None
-    train_data = train_data_full
+    init_conditions_valid = None
+    init_conditions_train = init_conditions_train_full
+
 # data for plots
 t_ext = args.horizon * 4
-plot_data = torch.zeros(1, t_ext, train_data.shape[-1], device=device)
+plot_data = torch.zeros(1, t_ext, init_conditions_train.shape[-1], device=device)
 plot_data[:, 0, :] = (sys.x_init.detach() - sys.x_target)
 plot_data = plot_data.to(device)
 # batch the data
-train_dataloader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True)
+train_dataloader = DataLoader(init_conditions_train, batch_size=args.batch_size, shuffle=True)
 
 
 # ------------ 3. Controller ------------
 ctl = PerfBoostController(internal_model=G0,
-                          input_init=sys.y_init,
+                          input_init=sys.y_init_nominal,
                           output_init=sys.u_init,
                           nn_type=args.nn_type,
                           non_linearity=args.non_linearity,
@@ -215,7 +219,7 @@ loss_fn_primal = RobotsLoss(
 )
 # ------------ 5. Training primal ------------
 ctl.fit(
-    sys=sys, train_dataloader=train_dataloader, valid_data=valid_data,
+    sys=sys, train_dataloader=train_dataloader, valid_data=init_conditions_valid,
     lr=args.lr, loss_fn=loss_fn_primal, epochs=args.epochs, log_epoch=args.log_epoch,
     return_best=args.return_best, logger=logger, early_stopping=args.early_stopping,
     n_logs_no_change=args.n_logs_no_change, tol_percentage=args.tol_percentage
@@ -230,10 +234,10 @@ torch.save(res_dict, filename)
 logger.info('[INFO] saved trained model.')
 
 # evaluate on the train data
-logger.info('\n[INFO] evaluating the trained controller on %i training rollouts.' % train_data.shape[0])
+logger.info('\n[INFO] evaluating the trained controller on %i training rollouts.' % init_conditions_train.shape[0])
 with torch.no_grad():
     x_log, _, u_log = sys.rollout(
-        controller=ctl, data=train_data, train=False,
+        controller=ctl, data=init_conditions_train, train=False,
     )   # use the entire train data, not a batch
     # evaluate losses
     loss = loss_fn_primal.forward(x_log, u_log)

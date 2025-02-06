@@ -126,7 +126,7 @@ class ContractiveREN(nn.Module):
         self.D11 = -torch.tril(H22, diagonal=-1)
         self.C1 = -H21
 
-    def forward(self, u_in):
+    def forward(self, u):
         """
         Forward pass of REN.
 
@@ -139,21 +139,21 @@ class ContractiveREN(nn.Module):
         # update non-trainable model params
         self._update_model_param()
 
-        batch_size = u_in.shape[0]
+        batch_size = u.shape[0]
 
-        w = torch.zeros(batch_size, 1, self.dim_nl, device=u_in.device)
+        w = torch.zeros(batch_size, 1, self.dim_nl, device=u.device)
 
         # update each row of w using Eq. (8) with a lower triangular D11
         for i in range(self.dim_nl):
             #  v is element i of v with dim (batch_size, 1)
-            v = F.linear(self.x, self.C1[i, :]) + F.linear(w, self.D11[i, :]) + F.linear(u_in, self.D12[i,:])
+            v = F.linear(self.x, self.C1[i, :]) + F.linear(w, self.D11[i, :]) + F.linear(u, self.D12[i,:])
             w = w + (self.eye_mask_w[i, :] * torch.tanh(v / self.Lambda[i])).reshape(batch_size, 1, self.dim_nl)
 
         # compute next state using Eq. 18
-        self.x = F.linear(F.linear(self.x, self.F) + F.linear(w, self.B1) + F.linear(u_in, self.B2), self.E_inv)
+        self.x = F.linear(F.linear(self.x, self.F) + F.linear(w, self.B1) + F.linear(u, self.B2), self.E_inv)
 
         # compute output
-        y_out = F.linear(self.x, self.C2) + F.linear(w, self.D21) + F.linear(u_in, self.D22)
+        y_out = F.linear(self.x, self.C2) + F.linear(w, self.D21) + F.linear(u, self.D22)
         return y_out
 
     def rollout(self, u_in):
