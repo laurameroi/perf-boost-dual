@@ -18,27 +18,31 @@ class RobotsLoss(LQLossFH):
         if self.alpha_col is not None:
             assert self.n_agents is not None
         # define obstacles
-        if obstacle_centers is None:
-            if self.n_agents==2:
-                self.obstacle_centers = [
-                    torch.tensor([[-2.5, 0]], device=device),
-                    torch.tensor([[2.5, 0.0]], device=device),
-                    torch.tensor([[-1.5, 0.0]], device=device),
-                    torch.tensor([[1.5, 0.0]], device=device),
-                ]
-            elif self.n_agents==1:
-                self.obstacle_centers = [
-                    torch.tensor([[1, -1]], device=device),
-                ]
+        if self.alpha_obst is not None:
+            if obstacle_centers is None:
+                if self.n_agents==2:
+                    self.obstacle_centers = [
+                        torch.tensor([[-2.5, 0]], device=device),
+                        torch.tensor([[2.5, 0.0]], device=device),
+                        torch.tensor([[-1.5, 0.0]], device=device),
+                        torch.tensor([[1.5, 0.0]], device=device),
+                    ]
+                elif self.n_agents==1:
+                    self.obstacle_centers = [
+                        torch.tensor([[1, -1]], device=device),
+                        # torch.tensor([[1.25, -0.75]], device=device),
+                    ]
+            else:
+                self.obstacle_centers = obstacle_centers
+            if obstacle_covs is None:
+                self.obstacle_covs = [
+                    torch.tensor([[0.2, 0.2]], device=device)
+                ] * len(self.obstacle_centers)
+            else:
+                self.obstacle_covs = obstacle_covs
         else:
-            self.obstacle_centers = obstacle_centers
-        if obstacle_covs is None:
-            self.obstacle_covs = [
-                torch.tensor([[0.2, 0.2]], device=device)
-            ] * len(self.obstacle_centers)
-        
-        else:
-            self.obstacle_covs = obstacle_covs
+            self.obstacle_centers = None
+            self.obstacle_covs = None
 
         # mask
         self.mask = torch.logical_not(torch.eye(self.n_agents, device=device))   # shape = (n_agents, n_agents)
@@ -105,8 +109,8 @@ class RobotsLoss(LQLossFH):
         Return:
             - obstacle avoidance loss of shape (1, 1).
         """
-        q_horizontal = y_batched[:, :, 0::4, :]   # position x of all agents. shape = (S, T, n_agents, 1)
-        q_vertical = y_batched[:, :, 1::4, :]   # position y of all agents. shape = (S, T, n_agents, 1)
+        q_horizontal = y_batched[:, :, 0::int(y_batched.shape[-2]/self.n_agents), :]   # position x of all agents. shape = (S, T, n_agents, 1)
+        q_vertical = y_batched[:, :, 1::int(y_batched.shape[-2]/self.n_agents), :]   # position y of all agents. shape = (S, T, n_agents, 1)
         # batched over all samples and all times of [x agent 1, y agent 1, ..., x agent n, y agent n]
         q = torch.cat((q_horizontal,q_vertical), dim=-1).view(y_batched.shape[0], y_batched.shape[1], 1,-1).squeeze(dim=2)    # shape = (S, T, 2*n_agents)
         # sum up loss due to each obstacle #TODO

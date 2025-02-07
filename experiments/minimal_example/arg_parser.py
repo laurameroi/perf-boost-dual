@@ -8,7 +8,7 @@ def argument_parser():
     # experiment primal
     parser.add_argument('--random-seed', type=int, default=5, help='Random seed. Default is 5.')
     parser.add_argument('--col-av', type=str2bool, default=False, help='Avoid collisions. Default is True.')
-    parser.add_argument('--obst-av', type=str2bool, default=False, help='Avoid obstacles. Default is True.')
+    parser.add_argument('--obst-av', type=str2bool, default=True, help='Avoid obstacles. Default is True.')
 
     # dataset primal
     parser.add_argument('--horizon', type=int, default=100, help='Time horizon for the computation. Default is 100.')

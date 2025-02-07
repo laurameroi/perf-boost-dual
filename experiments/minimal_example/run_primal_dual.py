@@ -18,8 +18,6 @@ from controllers.PB_controller import PerfBoostController
 from controllers.contractive_ren import ContractiveREN
 from loss_functions import RobotsLoss
 from assistive_functions import WrapLogger
-import math
-from argparse import Namespace
 # from controllers.SSMs import DWN, DWNConfig
 
 args = argument_parser()
@@ -195,7 +193,7 @@ output_noise_test = sys.generate_output_noise(
     noise_only_on_init=False
 ).to(device)
 # validation data
-if args.early_stopping or args.return_best:
+if args.early_stopping or args.return_best_K:
     valid_inds = torch.randperm(output_noise_train_full.shape[0])[:int(args.validation_frac*output_noise_train_full.shape[0])]
     train_inds = [ind for ind in range(output_noise_train_full.shape[0]) if ind not in valid_inds]
     output_noise_valid = output_noise_train_full[valid_inds, :, :]
@@ -210,11 +208,16 @@ else:
 # plot_data = plot_data.to(device)
 plot_data = output_noise_test[0:1, :, :]
 # batch the data
-train_dataloader = DataLoader(output_noise_train, batch_size=args.batch_size_K, shuffle=True)
+train_dataloader = DataLoader(
+    output_noise_train, 
+    batch_size=min(args.batch_size_K, args.num_rollouts_K), shuffle=True
+)
 
 
 # ------------ 3. Controller ------------
-K0 = PerfBoostController(internal_model=G0,
+output_amplification = 20    # TODO: Note that this used to be 20!
+logger.info('output_amplification for K0 = '+ str(output_amplification))
+K0 = PerfBoostController(internal_model=sys, #G0,
                           input_init=sys.y_init_nominal,
                           output_init=sys.u_init,
                           nn_type=args.nn_type,
@@ -222,8 +225,8 @@ K0 = PerfBoostController(internal_model=G0,
                           dim_internal=args.dim_internal,
                           dim_nl=args.dim_nl,
                           initialization_std=args.cont_init_std,
-                          output_amplification=1,  # TODO: Note that this used to be 20!
-                          ren_internal_state_init = None # TODO
+                          output_amplification=output_amplification,  
+                          ren_internal_state_init = None, # TODO,
                           ).to(device)
 
 # print(K0.internal_model.X.requires_grad)
@@ -274,7 +277,8 @@ K0.fit(
     sys=sys, train_dataloader=train_dataloader, valid_data=output_noise_valid,
     lr=args.lr_K, loss_fn=loss_fn_primal, epochs=args.epochs_K, log_epoch=args.log_epoch_K,
     return_best=args.return_best_K, logger=logger, early_stopping=args.early_stopping,
-    n_logs_no_change=args.n_logs_no_change, tol_percentage=args.tol_percentage
+    n_logs_no_change=args.n_logs_no_change, tol_percentage=args.tol_percentage, 
+    save_folder=save_folder, plot_data=plot_data
 )
 # ------ 6. Save and evaluate the trained model ------
 # save
@@ -348,6 +352,7 @@ closedloop_data_out_test, closedloop_data_in_test = dataset.generate_closedloop_
 
 # #-------------Dual step: learn G1 from closed-loop data-----------------
 # Create the model G1
+output_amplification = 1 # TODO: Note that this used to be 20!
 G1 = PerfBoostController(internal_model=K0,
                           input_init=sys.u_init,
                           output_init=sys.y_init_nominal,
@@ -356,10 +361,10 @@ G1 = PerfBoostController(internal_model=K0,
                           dim_internal=args.dim_internal,
                           dim_nl=args.dim_nl,
                           initialization_std=args.cont_init_std,
-                          output_amplification=1,  # TODO: Note that this used to be 20!
+                          output_amplification=output_amplification,  
                           ren_internal_state_init = None # TODO
                           ).to(device)
-
+logger.info('output_amplification for G1'+ str(output_amplification))
 # plot before training
 n_example = 2  # Number of example trajectories to plot
 plt.figure(figsize=(10, 6))

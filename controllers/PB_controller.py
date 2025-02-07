@@ -1,12 +1,14 @@
-import torch, time, copy
+import torch, time, copy, sys, os
 import torch.nn as nn
 import numpy as np
 
 from config import device
 from .contractive_ren import ContractiveREN
 from controllers.ssm import DeepSSM
-from assistive_functions import to_tensor
 
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(BASE_DIR)
+from experiments.minimal_example.plot_functions import plot_trajectories
 
 class PerfBoostController(nn.Module):
     """
@@ -200,8 +202,12 @@ class PerfBoostController(nn.Module):
 
     def fit(
         self, sys, train_dataloader, valid_data, lr, loss_fn, epochs, 
-        log_epoch, logger, return_best, early_stopping, n_logs_no_change=None, tol_percentage=None
+        log_epoch, logger, return_best, early_stopping, 
+        n_logs_no_change=None, tol_percentage=None, save_folder=None, plot_data=None,
     ):
+        if plot_data is None and (not valid_data is None):
+            plot_data = valid_data[0:1, :, :]
+
         logger.info('\n------------ Begin training ------------')
 
         # Set up optimizer
@@ -264,6 +270,19 @@ class PerfBoostController(nn.Module):
                     elapsed_time = time.time() - start_time
                     msg += f' ---||--- elapsed time: {elapsed_time:.0f} s'
                     logger.info(msg)
+
+                    # plot
+                    if not (save_folder is None or plot_data is None):
+                        y_log, _, u_log = sys.rollout(self, plot_data)
+                        filename = 'CL_epoch'+str(epoch)
+                        plot_trajectories(
+                            y_log[0, :, :],  # remove extra dim due to batching
+                            save_folder=save_folder, ybar=sys.y_target, n_agents=sys.n_agents, 
+                            filename=filename, text="CL - iteration "+str(epoch), T=plot_data.shape[1],
+                            obstacle_centers=loss_fn.obstacle_centers,
+                            obstacle_covs=loss_fn.obstacle_covs,
+                        )
+
                     if fitted:
                         break
         except Exception as e:

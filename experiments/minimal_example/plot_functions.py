@@ -13,17 +13,27 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 
 def plot_trajectories(
     y, ybar, n_agents, save_folder, text="", save=True, filename='', T=100,
-    dots=False, circles=False, axis=False, min_dist=1, f=5,
+    dots=True, circles=False, axis=True, min_dist=1, f=5,
     obstacle_centers=None, obstacle_covs=None
 ):
     ybar = ybar.flatten()
+    # get plot boundaries
+    x_min = min([ybar[0], min(y[:, 0])]).detach().cpu().numpy()
+    x_max = max([ybar[0], max(y[:, 0])]).detach().cpu().numpy()
+    y_min = min([ybar[1], min(y[:, 1])]).detach().cpu().numpy()
+    y_max = max([ybar[1], max(y[:, 1])]).detach().cpu().numpy()
 
     # fig = plt.figure(f)
-    fig, ax = plt.subplots(figsize=(f,f))
+    fig, ax = plt.subplots(
+        figsize=(f*(x_max-x_min)/(y_max-y_min),f*(y_max-y_min)/(x_max-x_min))
+    )
     # plot obstacles
     if not obstacle_covs is None:
         assert not obstacle_centers is None
-        yy, xx = np.meshgrid(np.linspace(-3, 3, 100), np.linspace(-3, 3, 100))
+        # generate 2 2d grids for the x & y bounds
+        dy, dx = 0.05, 0.05
+        yy, xx = np.mgrid[slice(y_min - 5*dy, y_max + 6*dy, dy),
+                        slice(x_min - 5*dx, x_max + 6*dx, dx)]
         zz = xx * 0
         for center, cov in zip(obstacle_centers, obstacle_covs):
             distr = multivariate_normal(
@@ -34,8 +44,8 @@ def plot_trajectories(
                 for j in range(xx.shape[1]):
                     zz[i, j] += distr.pdf([xx[i, j], yy[i, j]])
         z_min, z_max = np.abs(zz).min(), np.abs(zz).max()
-        ax = fig.subplots()
         ax.pcolormesh(xx, yy, zz, cmap='Greys', vmin=z_min, vmax=z_max, shading='gouraud')
+
 
     ax.set_title(text)
     colors = ['tab:blue', 'tab:orange']
@@ -62,9 +72,9 @@ def plot_trajectories(
     if dots:
         for i in range(n_agents):
             for j in range(T):
-                ax.plot(
+                ax.scatter(
                     y[j, state_dim*i].detach().cpu(), y[j, state_dim*i+1].detach().cpu(),
-                    color=colors[i%2], marker='o'
+                    c=colors[i%2], marker='o', s=1
                 )
     if circles:
         for i in range(n_agents):
