@@ -40,7 +40,7 @@ def argument_parser():
     # loss primal
     parser.add_argument('--alpha-u', type=float, default=0.1/400, help='Weight of the loss due to control input "u". Default is 0.1/400.')  #TODO: 400 is output_amplification^2
     parser.add_argument('--alpha-col', type=float, default=100, help='Weight of the collision avoidance loss. Default is 100 if "col-av" is True, else None.')
-    parser.add_argument('--alpha-obst', type=float, default=5e3, help='Weight of the obstacle avoidance loss. Default is 5e3 if "obst-av" is True, else None.')
+    parser.add_argument('--alpha-obst', type=float, default=10, help='Weight of the obstacle avoidance loss. Default is 10 if "obst-av" is True, else None.')
     parser.add_argument('--min-dist', type=float, default=1.0, help='TODO. Default is 1.0 if "col-av" is True, else None.')  #TODO: add help
 
     # optimizer primal (controller)

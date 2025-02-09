@@ -244,7 +244,8 @@ class PerfBoostController(nn.Module):
                 # Log training information
                 if epoch % log_epoch == 0:
                     msg = f'Epoch: {epoch} --- train loss: {loss.item():.2f}'
-                    if return_best or early_stopping:
+                    if (return_best or early_stopping) and (not valid_data is None):
+                        print(valid_data)
                         # Rollout the current controller on the validation data
                         with torch.no_grad():
                             y_log_valid, _, u_log_valid = sys.rollout(controller=self, output_noise_data=valid_data, train=False)

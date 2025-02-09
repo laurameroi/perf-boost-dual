@@ -196,7 +196,7 @@ output_noise_test = sys.generate_output_noise(
 if args.early_stopping or args.return_best_K:
     valid_inds = torch.randperm(output_noise_train_full.shape[0])[:int(args.validation_frac*output_noise_train_full.shape[0])]
     train_inds = [ind for ind in range(output_noise_train_full.shape[0]) if ind not in valid_inds]
-    output_noise_valid = output_noise_train_full[valid_inds, :, :]
+    output_noise_valid = output_noise_train_full[valid_inds, :, :] if len(valid_inds)>0 else None
     output_noise_train = output_noise_train_full[train_inds, :, :]
 else:
     output_noise_valid = None
@@ -217,7 +217,8 @@ train_dataloader = DataLoader(
 # ------------ 3. Controller ------------
 output_amplification = 20    # TODO: Note that this used to be 20!
 logger.info('output_amplification for K0 = '+ str(output_amplification))
-K0 = PerfBoostController(internal_model=sys, #G0,
+logger.info('[Info] internal model is G0')
+K0 = PerfBoostController(internal_model=G0, # sys, #
                           input_init=sys.y_init_nominal,
                           output_init=sys.u_init,
                           nn_type=args.nn_type,
