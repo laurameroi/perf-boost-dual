@@ -6,17 +6,21 @@ from config import device
 class RobotsLoss(LQLossFH):
     def __init__(
         self, ybar, Q, alpha_u=1,
-        alpha_col=None, alpha_obst=None,
+        alpha_col=None, alpha_obst=None, alpha_terminal=None,
         loss_bound=None, sat_bound=None,
         n_agents=1, min_dist=0.5,
         obstacle_centers=None, obstacle_covs=None
     ):
         super().__init__(Q=Q, R=alpha_u, loss_bound=loss_bound, sat_bound=sat_bound, ybar=ybar)
         self.n_agents = n_agents
-        self.alpha_col, self.alpha_obst, self.min_dist = alpha_col, alpha_obst, min_dist
+        self.alpha_col, self.alpha_obst, self.alpha_terminal, self.min_dist = alpha_col, alpha_obst, alpha_terminal, min_dist
         assert (self.alpha_col is None and self.min_dist is None) or not (self.alpha_col is None or self.min_dist is None)
         if self.alpha_col is not None:
             assert self.n_agents is not None
+        if self.alpha_terminal==0:
+            self.alpha_terminal = None
+        if not self.alpha_terminal is None:
+            assert self.alpha_terminal >= 1
         # define obstacles
         if self.alpha_obst is not None:
             if obstacle_centers is None:
@@ -77,6 +81,14 @@ class RobotsLoss(LQLossFH):
             u_batch
         )   # shape = (S, T, 1, 1)
         loss_u = torch.sum(uTRu, 1) / y_batch.shape[1]    # average over the time horizon. shape = (S, 1, 1)
+        # terminal cost
+        if self.alpha_terminal is None:
+            loss_terminal = 0
+        else:
+            loss_terminal = torch.matmul(
+                y_batch_centered[:, -1, :, :].transpose(-1, -2),
+                y_batch_centered[:, -1, :, :]
+            )   # shape = (S, 1, 1)
         # collision avoidance loss
         if self.alpha_col is None:
             loss_ca = 0
@@ -88,7 +100,7 @@ class RobotsLoss(LQLossFH):
         else:
             loss_obst = self.alpha_obst * self.f_loss_obst(y_batch) # shape = (S, 1, 1)
         # sum up all losses
-        loss_val = loss_y + loss_u + loss_ca + loss_obst            # shape = (S, 1, 1)
+        loss_val = loss_y + loss_u + loss_terminal + loss_ca + loss_obst            # shape = (S, 1, 1)
         # bound
         if self.sat_bound is not None:
             loss_val = torch.tanh(loss_val/self.sat_bound)  # shape = (S, 1, 1)

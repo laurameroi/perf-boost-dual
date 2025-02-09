@@ -217,8 +217,8 @@ train_dataloader = DataLoader(
 # ------------ 3. Controller ------------
 output_amplification = 20    # TODO: Note that this used to be 20!
 logger.info('output_amplification for K0 = '+ str(output_amplification))
-logger.info('[Info] internal model is G0')
-K0 = PerfBoostController(internal_model=G0, # sys, #
+logger.info('[Info] internal model is sys')
+K0 = PerfBoostController(internal_model=sys, # sys, #
                           input_init=sys.y_init_nominal,
                           output_init=sys.u_init,
                           nn_type=args.nn_type,
@@ -239,6 +239,7 @@ Q = torch.kron(torch.eye(args.n_agents), torch.eye(2)).to(device)   # TODO: move
 loss_fn_primal = RobotsLoss(
     Q=Q, alpha_u=args.alpha_u, ybar=sys.y_target,
     loss_bound=None, sat_bound=None,
+    alpha_terminal=args.alpha_terminal,
     alpha_col=args.alpha_col, alpha_obst=args.alpha_obst,
     min_dist=args.min_dist if args.col_av else None,
     n_agents=args.n_agents,

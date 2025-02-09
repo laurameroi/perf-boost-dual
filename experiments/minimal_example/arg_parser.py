@@ -39,6 +39,7 @@ def argument_parser():
 
     # loss primal
     parser.add_argument('--alpha-u', type=float, default=0.1/400, help='Weight of the loss due to control input "u". Default is 0.1/400.')  #TODO: 400 is output_amplification^2
+    parser.add_argument('--alpha-terminal', type=float, default=100, help='Weight of the terminal cost. Default is 100.')
     parser.add_argument('--alpha-col', type=float, default=100, help='Weight of the collision avoidance loss. Default is 100 if "col-av" is True, else None.')
     parser.add_argument('--alpha-obst', type=float, default=10, help='Weight of the obstacle avoidance loss. Default is 10 if "obst-av" is True, else None.')
     parser.add_argument('--min-dist', type=float, default=1.0, help='TODO. Default is 1.0 if "col-av" is True, else None.')  #TODO: add help
@@ -133,6 +134,7 @@ def print_args(args):
         msg += ' -- non_linearity: %s' % args.non_linearity
 
     msg += '\n[INFO] Loss:  alpha_u: %.6f' % args.alpha_u
+    msg += ' -- alpha_terminal: %.f' % args.alpha_terminal
     msg += ' -- alpha_col: %.f' % args.alpha_col if args.col_av else ' -- no collision avoidance'
     msg += ' -- alpha_obst: %.1f' % args.alpha_obst if args.obst_av else ' -- no obstacle avoidance'
 

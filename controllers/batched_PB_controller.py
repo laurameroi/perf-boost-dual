@@ -10,7 +10,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 sys.path.append(BASE_DIR)
 from experiments.minimal_example.plot_functions import plot_trajectories
 
-class PerfBoostController(nn.Module):
+class BatchedPerfBoostController(nn.Module):
     """
     Performance boosting controller, following the paper:
         "Learning to Boost the Performance of Stable Nonlinear Systems".
