@@ -138,7 +138,7 @@ def print_args(args):
     msg += ' -- alpha_col: %.f' % args.alpha_col if args.col_av else ' -- no collision avoidance'
     msg += ' -- alpha_obst: %.1f' % args.alpha_obst if args.obst_av else ' -- no obstacle avoidance'
 
-    msg += '\n[INFO] Optimizer: lr_G: %.2e' % args.lr_G + 'lr_K: %.2e' % args.lr_K
+    msg += '\n[INFO] Optimizer: lr_G: %.2e' % args.lr_G + ' -- lr_K: %.2e' % args.lr_K
     msg += ' -- epochs plant: %i,' % args.epochs_G + ' -- epochs controller: %i,' % args.epochs_K
     msg += ' -- batch_size_G: %i,' % args.batch_size_G + ' -- batch_size_K: %i,' % args.batch_size_K
     msg += ' -- return best model for validation data among logged epochs for plant and controller: ' + str(args.return_best_G) + str(args.return_best_K)

@@ -34,6 +34,7 @@ class RobotsSystem(torch.nn.Module):
         self.output_dim = 2*self.n_agents
 
         # initial state
+        self.t = 0
         x_init = x_init.reshape(1, self.state_dim)   # shape = (1, state_dim)
         self.register_buffer('x_init', x_init)
         u_init = torch.zeros(1, self.input_dim) if u_init is None else u_init.reshape(1, self.input_dim)   # shape = (1, input_dim)
@@ -96,6 +97,7 @@ class RobotsSystem(torch.nn.Module):
         return A    # shape = (batch_size, 4 * n_agents, 4 * n_agents)
 
     def reset(self):
+        self.t = 0
         self.x = self.x_init.detach().clone().reshape(1, 1, self.state_dim)
 
     def noiseless_forward(self, t, u: torch.Tensor):
@@ -140,6 +142,7 @@ class RobotsSystem(torch.nn.Module):
         Returns:
             noisy output of the plant at time t
         """
+        self.t += 1
         if len(u.shape)==2:
             u = u.reshape(1, *u.shape)
         if output_noise is None: 

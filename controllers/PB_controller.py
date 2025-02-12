@@ -312,12 +312,15 @@ class PerfBoostController(nn.Module):
             input_noise_data = torch.zeros(*output_noise_data.shape[0:2], sys.input_dim, device=sys.x_init.device)
         # init
         self.reset()
+        sys.reset()
         sys.x = sys.x_init.detach().clone().repeat(output_noise_data.shape[0], 1, 1) #+noise on initial conditions?
         u = sys.u_init.detach().clone().repeat(output_noise_data.shape[0], 1, 1) #apply pb also at t=0 on initial conditions mismatch?
         u += ref[:, 0:1, :] + input_noise_data[:, 0:1, :]
         
         # Simulate
         for t in range(output_noise_data.shape[1]):
+            # print('t ', t, ' - internal model time ', self.internal_model.t, ' - sys time ', sys.t)
+            # print('t ', t, ' - sys state ', sys.x[0], ' - internal model state ', self.internal_model.x[0])
             y = sys.forward(t=t, u=u, output_noise=output_noise_data[:, t:t+1, :]) # y_t, x_{t+1} gets stored in sys.x
             if t == 0:
                 y_log, u_log = y, u
@@ -328,7 +331,7 @@ class PerfBoostController(nn.Module):
             # compute u for the next time step
             if not t == output_noise_data.shape[1]-1:
                 u = self(y)+ref[:, t+1:t+2, :] + input_noise_data[:, t+1:t+2, :] # u_{t+1} shape = (batch_size, 1, input_dim)
-
+        # exit()
         self.reset()
         if not train:
             y_log, u_log = y_log.detach(), u_log.detach()

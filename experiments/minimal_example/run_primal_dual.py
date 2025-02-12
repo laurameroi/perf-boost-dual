@@ -49,7 +49,15 @@ sys = RobotsSystem(input_noise_std=args.input_noise_std,
                    linear_plant=args.linearize_plant,
                    k=args.spring_const
                    ).to(device)
-
+sys_copy = RobotsSystem(input_noise_std=args.input_noise_std,
+                   output_noise_std=args.output_noise_std,
+                   y_target=dataset.y_target,
+                   x_init=dataset.x_init,
+                   u_init=None, # zero
+                   linear_plant=args.linearize_plant,
+                   k=args.spring_const
+                   ).to(device)
+sys_copy.x_init = sys_copy.x_init*1.1
 # ------------ Open loop data collection ------------
 openloop_data_out_train, openloop_data_in_train = dataset.generate_openloop_dataset(
     num_samples=args.num_rollouts_G, ts=0.05, noise_only_on_init=False, sys=sys
@@ -125,7 +133,7 @@ if TRAIN_G0:
     torch.save(G0.state_dict(), filename)
     logger.info('[INFO] saved trained G0.')
 else:
-    filename_load = os.path.join(save_path, 'perf_boost_REN_02_06_13_30_42', 'trained_G0'+'.pt')
+    filename_load = os.path.join(save_path, 'perf_boost_REN_02_10_12_32_30', 'trained_G0'+'.pt')
     res_dict = torch.load(filename_load)
     G0.load_state_dict(res_dict)
 
@@ -218,7 +226,7 @@ train_dataloader = DataLoader(
 output_amplification = 20    # TODO: Note that this used to be 20!
 logger.info('output_amplification for K0 = '+ str(output_amplification))
 logger.info('[Info] internal model is sys')
-K0 = PerfBoostController(internal_model=sys, # sys, #
+K0 = PerfBoostController(internal_model=sys_copy, # G0, #
                           input_init=sys.y_init_nominal,
                           output_init=sys.u_init,
                           nn_type=args.nn_type,

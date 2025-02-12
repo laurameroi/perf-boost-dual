@@ -78,12 +78,12 @@ class ContractiveREN(nn.Module):
         if self.linear_output:
             # set D21 to zero
             self.training_param_names.remove('D21') # not trainable anymore
-            self.D21 = torch.zeros(*self.D21_shape, device=self.device) * self.initialization_std
+            self.D21 = torch.zeros(*self.D21_shape, device=self.device)
             # set D22 to zero
-            self.D22 = torch.zeros(*self.D22_shape, device=self.device) * self.initialization_std
+            self.D22 = torch.zeros(*self.D22_shape, device=self.device)
             self.training_param_names.remove('D22') # not trainable anymore
 
-        self._init_trainable_params(initialization_std)
+        self._init_trainable_params()
 
         # mask
         self.register_buffer('eye_mask_H', torch.eye(2 * self.dim_internal + self.dim_nl))
@@ -172,12 +172,12 @@ class ContractiveREN(nn.Module):
         self.x = self.x_init  # reset the REN state to the initial value
 
     # init trainable params
-    def _init_trainable_params(self, initialization_std):
+    def _init_trainable_params(self):
         for training_param_name in self.training_param_names:  # name of one of the training params, e.g., X
             # read the defined shapes of the selected training param, e.g., X_shape
             shape = getattr(self, training_param_name + '_shape')
             # define the selected param (e.g., self.X) as nn.Parameter
-            setattr(self, training_param_name, nn.Parameter((torch.randn(*shape) * initialization_std)))
+            setattr(self, training_param_name, nn.Parameter((torch.randn(*shape) * self.initialization_std)))
 
     # setters and getters
     def get_parameter_shapes(self):
