@@ -14,8 +14,8 @@ def argument_parser():
     parser.add_argument('--horizon', type=int, default=100, help='Time horizon for the computation. Default is 100.')
     parser.add_argument('--n-agents', type=int, default=1, help='Number of agents. Default is 1.')
     parser.add_argument('--num-rollouts-K', type=int, default=30, help='Number of rollouts in the training data. Default is 30.')
-    parser.add_argument('--input-noise-std', type=float, default=0.2, help='std of the noise on the input to the plant (d). Default is 0.0.')
-    parser.add_argument('--output-noise-std', type=float, default=0.2, help='std of the noise on the plant output (v). Default is 0.2.')
+    parser.add_argument('--input-noise-std', type=float, default=0.0, help='std of the noise on the input to the plant (d). Default is 0.0.')
+    parser.add_argument('--output-noise-std', type=float, default=0.02, help='std of the noise on the plant output (v). Default is 0.2.')
 
     # dataset dual
     parser.add_argument('--num-rollouts-G', type=int, default=50, help='Number of signals in the training data. Default is 50.')

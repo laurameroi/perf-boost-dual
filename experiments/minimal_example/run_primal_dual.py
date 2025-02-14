@@ -21,7 +21,7 @@ from assistive_functions import WrapLogger
 # from controllers.SSMs import DWN, DWNConfig
 
 args = argument_parser()
-TRAIN_G0 = False
+TRAIN_G0 = True
 
 # ----- SET UP LOGGER -----
 now = datetime.now().strftime("%m_%d_%H_%M_%S")
